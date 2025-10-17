@@ -57,6 +57,19 @@ class DocProcessor:
             
         return "".join(tables_markdown)
 
+    def process_document_to_markdown(self, pdf_path):
+        """
+        Process a PDF document and return the markdown content.
+        This method combines parsing and markdown conversion for convenient use.
+        """
+        # Parse the document
+        parsed_doc = self.parse_once(pdf_path)
+        
+        # Convert to markdown
+        markdown_content = self.process_to_markdown(parsed_doc)
+        
+        return markdown_content
+
 if __name__ == "__main__":
     # python parser.py data/nvidia_form_10-k.pdf
     parser = argparse.ArgumentParser(
@@ -142,5 +155,10 @@ if __name__ == "__main__":
     print(markdown_text[:500]) 
             
     print('\n')
-    sections = extract_sections(markdown_text)
-    print(f"Extracted {len(sections)} sections from markdown.")
+    # Use the normalize_and_segment_markdown function from extraction.py if available
+    try:
+        from extraction import normalize_and_segment_markdown
+        sections = normalize_and_segment_markdown(markdown_text, Path(args.pdf_file).stem)
+        print(f"Extracted {len(sections)} sections from markdown.")
+    except ImportError:
+        print("Note: Advanced section extraction not available. Basic parsing completed.")

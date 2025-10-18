@@ -1,12 +1,15 @@
 import re
 import json
 import os
+import shutil
+import tempfile
+import time
 from openai import OpenAI
 from dotenv import load_dotenv 
 
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Any
-from report_generator import CompanyReport, DDRGenerator, FinancialData
+from report_generator import BoardMember, CompanyReport, CoreCompetency, DDRGenerator, FinancialData
 from embeddings import search_sections, build_section_embeddings, append_next_sections
 
 
@@ -14,6 +17,42 @@ import argparse
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+from enum import Enum
+
+class Lang(str, Enum):
+    EN = "en"
+    ZH_HANS = "zh-Hans"   # Simplified Chinese (CN)
+    ZH_HANT = "zh-Hant"   # Traditional Chinese (HK)
+
+# Markets: US, UK, CN, HK, SG, AU, MY, ID
+def market_to_lang(market_code: str) -> Lang:
+    m = (market_code or "").strip().upper()
+    if m == "CN":
+        return Lang.ZH_HANS
+    if m == "HK":
+        return Lang.ZH_HANT
+    # All others (incl. SG, MY, ID outputs) => English output
+    return Lang.EN
+
+def lang_display_name(lang: Lang) -> str:
+    return {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文"}[lang]
+
+def is_chinese(lang: Lang) -> bool:
+    return lang in (Lang.ZH_HANS, Lang.ZH_HANT)
+
+
+_COMPANY_NAME: Optional[str] = None
+
+def set_company_name(name: Optional[str]) -> None:
+    global _COMPANY_NAME
+    _COMPANY_NAME = (name or "").strip() or None
+
+def get_company_name() -> str:
+    return _COMPANY_NAME or "the company"
+
+def _company_or_generic() -> str:
+    return get_company_name()
 
 HEADING_RE = re.compile(r'^(#{1,6})\s+(.*)$', re.M)
 TABLE_BLOCK_RE = re.compile(r'(?:^\|.*\|\s*\n)+^\|(?:\s*:?-+:?\s*\|)+\s*\n(?:^\|.*\|\s*\n)+', re.M)
@@ -1690,7 +1729,7 @@ def extract_balance_sheet(bs_text: str, years: list[int] = [2024, 2023, 2022]) -
             out["fields"][f][str(y)] = _coerce_number_or_na(raw)
             j += 1
         i += 1
-    print(f"[S2.2] Extracted Balance Sheet: {json.dumps(out)}")
+    # print(f"[S2.2] Extracted Balance Sheet: {json.dumps(out)}")
     return out
 
 def llm_pick_balance_sheet_sections(
@@ -2717,17 +2756,17 @@ def llm_pick_operating_performance_sections(
         )
 
         user_prompt = f"""
-You will receive annual report sections (title + section_id).
-Select entries most likely to contain:
-- Segment revenue: "Sensors & Information", "Countermeasures & Energetics", by year totals
-- Geographic revenue: lines like "UK", "US", "Europe", "Asia Pacific", "Rest of the world"
-Also consider phrases: "revenue by destination", "geographical analysis", "operating segments".
+            You will receive annual report sections (title + section_id).
+            Select entries most likely to contain:
+            - Segment revenue: "Sensors & Information", "Countermeasures & Energetics", by year totals
+            - Geographic revenue: lines like "UK", "US", "Europe", "Asia Pacific", "Rest of the world"
+            Also consider phrases: "revenue by destination", "geographical analysis", "operating segments".
 
-Return a JSON array of objects: {{ "section_id": string, "score": 0..1 }}
+            Return a JSON array of objects: {{ "section_id": string, "score": 0..1 }}
 
-Sections:
-{json.dumps(compact, ensure_ascii=False)}
-""".strip()
+            Sections:
+            {json.dumps(compact, ensure_ascii=False)}
+            """.strip()
 
         resp = client.chat.completions.create(
             model=model,
@@ -3194,6 +3233,7 @@ def llm_build_profitability_analysis(
 
 
 # --------------------------- S 3.2 Financial Performance Summary -------------------------------------------
+
 def _s32_round_fields(table: Dict[str, Any]) -> Dict[str, Any]:
     """Compact numerics for prompt readability; keep 'N/A' as-is."""
     out = {"years": table.get("years", []), "multiplier": table.get("multiplier"), "currency": table.get("currency"), "fields": {}}
@@ -3915,19 +3955,1463 @@ def llm_pick_risk_sections(jsonl_path: str, top_k: int = 10, batch_size: int = 1
 
 # --------------------------- S 5.1 Board Composition (default 2024) -------------------------------------------
 
+def _board_prompt(text: str, max_rows: int) -> str:
+    """
+    Strict JSON-only extractor for Board Composition (2024).
+    Returns an array of director rows with fields:
+      - name
+      - position
+      - total_income  (preserve currency symbol/format if present; else "N/A")
+    """
+    return f"""
+        You will extract *verbatim-faithful* Board Composition entries for 2024 from the TEXT.
+
+        RULES
+        - Use ONLY the TEXT below. Do NOT add names, roles, or pay info that are not present.
+        - Prefer the exact person names and role titles as written; minimal paraphrase.
+        - If total income / single figure is not present for a person, set "total_income" to "N/A".
+        - Include both executives and executive directors if listed.
+        - Do not include non-executives
+        - Output 1 object per person; max {max_rows} rows.
+
+        OUTPUT (JSON ONLY, no extra text):
+        {{
+        "rows": [
+            {{"name":"...", "position":"...", "total_income":"... or N/A"}}
+        ]
+        }}
+
+        TEXT:
+        {text}
+        """.strip()
+
+def _coerce_text(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    try:
+        return str(v)
+    except Exception:
+        return ""
+
+
+def _safe_json_object(s: str) -> dict:
+    import json, re
+    m = re.search(r"\{.*\}", s, flags=re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return {}
+
+
+def extract_board_composition(board_text: str, max_rows: int = 30) -> list[dict]:
+    """
+    Returns a list of dicts: [{"name": "...", "position": "...", "total_income": "... or N/A"}, ...]
+    """
+    if not board_text:
+        return []
+
+    prompt = _board_prompt(board_text, max_rows)
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Extract board composition faithfully. Output strict JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            max_tokens=1000
+        )
+        data = _safe_json_object(resp.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"[S5.1] LLM error: {e}")
+        data = {}
+
+    rows_in = data.get("rows") or []
+    out: list[dict] = []
+    i = 0
+    while i < len(rows_in) and len(out) < max_rows:
+        r = rows_in[i] or {}
+        name = _coerce_text(r.get("name"))
+        pos  = _coerce_text(r.get("position"))
+        pay  = _coerce_text(r.get("total_income"))
+        if pay == "":
+            pay = "N/A"
+        if name == "" and pos == "" and pay == "N/A":
+            i += 1
+            continue
+        out.append({"name": name if name != "" else "N/A",
+                    "position": pos if pos != "" else "N/A",
+                    "total_income": pay})
+        i += 1
+    return out
+
+def llm_pick_director_sections(jsonl_path: str, top_k: int = 10, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Focused on sections that list the board/leadership (names + positions).
+    """
+    import json as _json
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    def _batches(lst, n):
+        i = 0
+        while i < len(lst):
+            yield lst[i:i+n]
+            i += n
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            You will receive section titles with IDs from an annual report.
+            Select entries most likely to contain **Board/Directors listing** (names + positions), e.g.:
+            - "Board of Directors", "Board composition", "Corporate Governance", "Directors' Report",
+            - "Leadership team", "Management team", "Company Secretary", "Committee membership".
+
+            Avoid pay-only, audit-only, risk-only, or sustainability-only sections.
+
+            Return JSON array:
+            [{{"section_id": "...", "score": 0.0-1.0}}, ...]
+
+            Sections:
+            {_json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0,
+                max_tokens=800
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else _json.loads(m.group(0))
+            i = 0
+            while i < len(arr):
+                obj = arr[i]
+                sid = str(obj.get("section_id", "")).strip()
+                try:
+                    sc = float(obj.get("score", 0.0))
+                except Exception:
+                    sc = 0.0
+                if sid != "":
+                    scored.append((sid, sc))
+                i += 1
+        except Exception:
+            continue
+
+    if len(scored) == 0:
+        # fallback keywords tuned for names/positions
+        KEY = [
+            "board of directors", "board composition", "directors' report",
+            "corporate governance", "governance report", "leadership team",
+            "management team", "company secretary", "committee membership",
+            "nomination committee", "remuneration committee"
+        ]
+        def _score(t: str) -> float:
+            t2 = t.lower()
+            count = 0
+            i = 0
+            while i < len(KEY):
+                if KEY[i] in t2:
+                    count += 1
+                i += 1
+            return float(count)
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [str(s.get("section_id") or "") for s in ranked[:top_k] if s.get("section_id")]
+
+    # aggregate max score per id
+    best = {}
+    i = 0
+    while i < len(scored):
+        sid, sc = scored[i]
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+        i += 1
+
+    ranked_ids = sorted(best.items(), key=lambda x: x[1], reverse=True)
+    return [sid for sid, _ in ranked_ids[:top_k]]
+
+
+def llm_pick_pay_sections(jsonl_path: str, top_k: int = 10, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Focused on remuneration tables/charts with total income (e.g., 'Directors' emoluments', 'Single total figure').
+    """
+    import json as _json
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    def _batches(lst, n):
+        i = 0
+        while i < len(lst):
+            yield lst[i:i+n]
+            i += n
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            You will receive section titles with IDs from an annual report.
+            Select entries most likely to contain **Director pay totals/income**, e.g.:
+            - "Remuneration Report", "Directors’ remuneration", "Single total figure of remuneration",
+            - "Directors’ emoluments", "Executive directors’ total pay", "Total remuneration",
+            - "Pay outcomes", "Summary remuneration", "Annual remuneration", "PSP/LTIP/bonus" tables.
+
+            Avoid pure governance/board-listing sections without totals.
+
+            Return JSON array:
+            [{{"section_id": "...", "score": 0.0-1.0}}, ...]
+
+            Sections:
+            {_json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0,
+                max_tokens=800
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else _json.loads(m.group(0))
+            i = 0
+            while i < len(arr):
+                obj = arr[i]
+                sid = str(obj.get("section_id", "")).strip()
+                try:
+                    sc = float(obj.get("score", 0.0))
+                except Exception:
+                    sc = 0.0
+                if sid != "":
+                    scored.append((sid, sc))
+                i += 1
+        except Exception:
+            continue
+
+    if len(scored) == 0:
+        # fallback keywords tuned for totals/pay
+        KEY = [
+            "remuneration report", "directors’ remuneration", "directors' remuneration",
+            "single total figure of remuneration", "single total figure", "single figure",
+            "directors’ emoluments", "directors' emoluments", "emoluments (audited)",
+            "executive directors’ total pay", "executive directors' total pay",
+            "total remuneration", "total pay",
+            "bonus", "psp", "ltip", "long-term incentive", "pension benefits", "taxable benefits",
+            "salaries/fees", "fixed pay", "variable pay"
+        ]
+        def _score(t: str) -> float:
+            t2 = t.lower()
+            count = 0
+            i = 0
+            while i < len(KEY):
+                if KEY[i] in t2:
+                    count += 1
+                i += 1
+            return float(count)
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [str(s.get("section_id") or "") for s in ranked[:top_k] if s.get("section_id")]
+
+    best = {}
+    i = 0
+    while i < len(scored):
+        sid, sc = scored[i]
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+        i += 1
+
+    ranked_ids = sorted(best.items(), key=lambda x: x[1], reverse=True)
+    return [sid for sid, _ in ranked_ids[:top_k]]
+
+
+def _mult_factor(multiplier: str) -> int:
+    m = (multiplier or "Units").strip().lower()
+    if m in ("unit", "units"): return 1
+    if m in ("thousand", "thousands", "k"): return 1_000
+    if m in ("million", "millions", "mm", "m"): return 1_000_000
+    if m in ("billion", "billions", "bn", "b"): return 1_000_000_000
+    return 1
+
+def _format_money(value, currency_symbol="$", multiplier="Units") -> str:
+    # Accepts numbers or numeric strings like "2303", "(257)", "1,234"
+    if value is None: 
+        return "N/A"
+    s = str(value).strip()
+    if s.upper() == "N/A": 
+        return "N/A"
+    neg = s.startswith("(") and s.endswith(")")
+    s2 = s.strip("() ").replace(",", "")
+    try:
+        num = float(s2)
+    except Exception:
+        return "N/A"
+    num_full = num * _mult_factor(multiplier)
+    # integer-like amounts look cleaner as ints; keep decimals if needed
+    if abs(num_full - round(num_full)) < 1e-9:
+        num_full = int(round(num_full))
+        formatted = f"{num_full:,}"
+    else:
+        formatted = f"{num_full:,.2f}"
+    if neg:
+        # accounting-style negative
+        return f"({currency_symbol}{formatted})"
+    return f"{currency_symbol}{formatted}"
+
+def render_board_markdown(rows: List[Dict], *, currency_symbol="$", multiplier="Units") -> str:
+    """
+    rows: list of dicts like 
+      {"name": "...", "position": "...", "total_income": 2303}
+    multiplier: "Units" | "Thousands" | "Millions" | "Billions"
+    """
+    header = "| Name | Position | Total Income |\n| :--- | :------- | -----------: |"
+    body_lines = []
+    for r in rows:
+        name = str(r.get("name","")).strip()
+        pos  = str(r.get("position","")).strip()
+        pay  = _format_money(r.get("total_income","N/A"), currency_symbol, multiplier)
+        body_lines.append(f"| {name} | {pos} | {pay} |")
+    return "\n".join([header] + body_lines)
+
+# --------------------------- S 5.2 Internal Controls (2024 + 2023) -------------------------------------------
+
+def _controls_prompt_one(year: int, text_block: str) -> str:
+    return f"""
+        You will extract *verbatim-faithful* Internal Controls for {year} from the TEXT.
+
+        RULES
+        - Use ONLY the TEXT. No external context or inventions.
+        - Prefer exact phrases/proper nouns (e.g., "Three Lines of Defence", "Operational Framework", committee names, portals/tools).
+        - Output EXACTLY one concise sentence per category (semicolon allowed). Neutral tone.
+        - If a category is not supported by TEXT, output "N/A".
+
+        CATEGORIES (exact keys):
+        - "Risk assessment procedures"
+        - "Control activities"
+        - "Monitoring mechanisms"
+        - "Identified material weaknesses or deficiencies"
+        - "Effectiveness"
+
+        CONTENT CHECKLIST (include if present):
+        - Risk assessment procedures: framework names; business risk register + update frequency; probability/impact matrix; climate/location tools (e.g., Munich Re); risk owners.
+        - Control activities: “Operational Framework”; number of policies; Code of Conduct (and update month if given); compliance/training portals; operational assurance statements.
+        - Monitoring mechanisms: “Three Lines of Defence” roles; internal/external audit; committee names & cadence; half-yearly Group risk register reviews; thematic internal audit.
+        - Identified material weaknesses or deficiencies: summarize; else “N/A”.
+        - Effectiveness: Audit Committee/Board conclusions, with timing language (e.g., “throughout the year and up to approval date”).
+
+        OUTPUT (JSON ONLY, no extra text):
+        {{
+        "years": [{year}],
+        "controls": {{
+            "Risk assessment procedures": {{"{year}": "N/A"}},
+            "Control activities": {{"{year}": "N/A"}},
+            "Monitoring mechanisms": {{"{year}": "N/A"}},
+            "Identified material weaknesses or deficiencies": {{"{year}": "N/A"}},
+            "Effectiveness": {{"{year}": "N/A"}}
+        }}
+        }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+def llm_pick_controls_sections(jsonl_path: str, top_k: int = 10, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Pick sections likely containing internal controls / risk management text:
+    e.g., 'Risk management', 'Internal control', 'Operational Framework',
+    'Audit Committee', 'Three lines of defence', 'Internal Audit', 'ICFR', 'SOX'.
+    """
+    import json as _json, os, re
+
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    def _batches(lst, n):
+        i = 0
+        while i < len(lst):
+            yield lst[i:i+n]
+            i += n
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            You will receive section titles with IDs from an annual report.
+            Select entries most likely to contain **Internal Controls / Risk Management** content, such as:
+            - "Risk management", "Internal control", "Internal controls", "Control framework", "Operational Framework",
+            - "Three lines of defence", "Internal Audit", "Audit Committee", "Risk Management Committee",
+            - "ICFR", "SOX", "Effectiveness of internal control".
+
+            Avoid unrelated: remuneration-only, audit opinion-only, generic sustainability without control framework.
+
+            Return JSON array:
+            [{{"section_id": "...", "score": 0.0-1.0}}, ...]
+
+            Sections:
+            {_json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0,
+                max_tokens=800
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else _json.loads(m.group(0))
+            i = 0
+            while i < len(arr):
+                obj = arr[i]
+                sid = str(obj.get("section_id", "")).strip()
+                try:
+                    sc = float(obj.get("score", 0.0))
+                except Exception:
+                    sc = 0.0
+                if sid != "":
+                    scored.append((sid, sc))
+                i += 1
+        except Exception:
+            continue
+
+    if len(scored) == 0:
+        # Fallback keywords
+        KEY = [
+            "risk management", "internal control", "internal controls",
+            "control framework", "operational framework",
+            "three lines of defence", "three lines of defense",
+            "internal audit", "audit committee", "risk management committee",
+            "icfr", "sox", "effectiveness of internal control"
+        ]
+        def _score(t: str) -> float:
+            t2 = t.lower()
+            count = 0
+            i = 0
+            while i < len(KEY):
+                if KEY[i] in t2:
+                    count += 1
+                i += 1
+            return float(count)
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [str(s.get("section_id") or "") for s in ranked[:top_k] if s.get("section_id")]
+
+    # Aggregate best score per id
+    best = {}
+    i = 0
+    while i < len(scored):
+        sid, sc = scored[i]
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+        i += 1
+
+    ranked_ids = sorted(best.items(), key=lambda x: x[1], reverse=True)
+    return [sid for sid, _ in ranked_ids[:top_k]]
+
+def _cx_text_or_na(v) -> str:
+    if v is None:
+        return "N/A"
+    if isinstance(v, str):
+        s = v.strip()
+        return "N/A" if s == "" or s.upper() == "N/A" else s
+    try:
+        return str(v)
+    except Exception:
+        return "N/A"
+
+def extract_internal_controls_one(text: str, year: int) -> dict:
+    """
+    Returns:
+    {
+      "years": [year],
+      "controls": {
+         "<Category>": {"<year>": "..."}
+      }
+    }
+    """
+    cats = [
+        "Risk assessment procedures",
+        "Control activities",
+        "Monitoring mechanisms",
+        "Identified material weaknesses or deficiencies",
+        "Effectiveness",
+    ]
+    empty = {"years": [year], "controls": {c: {str(year): "N/A"} for c in cats}}
+
+    if not (text or "").strip():
+        return empty
+
+    prompt = _controls_prompt_one(year, text)
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Extract internal controls faithfully. Output strict JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            max_tokens=900
+        )
+        data = _safe_json_from_llm(resp.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"[S5.2] {year}: LLM error: {e}")
+        return empty
+
+    out = {"years": [year], "controls": {}}
+    for c in cats:
+        val = (data.get("controls", {}).get(c, {}) or {}).get(str(year), "N/A")
+        out["controls"][c] = {str(year): _cx_text_or_na(val)}
+    return out
+
+def merge_controls_two_years(ctrl_2024: dict, ctrl_2023: dict) -> dict:
+    cats = [
+        "Risk assessment procedures",
+        "Control activities",
+        "Monitoring mechanisms",
+        "Identified material weaknesses or deficiencies",
+        "Effectiveness",
+    ]
+    merged = {"years": [2024, 2023], "controls": {}}
+    for c in cats:
+        y24 = (ctrl_2024.get("controls", {}).get(c, {}) or {}).get("2024", "N/A")
+        y23 = (ctrl_2023.get("controls", {}).get(c, {}) or {}).get("2023", "N/A")
+        merged["controls"][c] = {"2024": _cx_text_or_na(y24), "2023": _cx_text_or_na(y23)}
+    return merged
+
+def print_internal_controls_table(controls: dict):
+    print("S5.2: Internal Controls")
+    print("Perspective | 2024 Report | 2023 Report")
+    print(":-- | :-- | :--")
+    cats = [
+        "Risk assessment procedures",
+        "Control activities",
+        "Monitoring mechanisms",
+        "Identified material weaknesses or deficiencies",
+        "Effectiveness",
+    ]
+    for c in cats:
+        y24 = controls.get("controls", {}).get(c, {}).get("2024", "N/A")
+        y23 = controls.get("controls", {}).get(c, {}).get("2023", "N/A")
+        print(f"{c} | {_cx_text_or_na(y24)} | {_cx_text_or_na(y23)}")
+
+
+
+# --------------------------- S 6.1 Strategic Direction -------------------------------------------
+
+def _strategy_prompt_one(year: int, text_block: str) -> str:
+    return f"""
+        You will extract *verbatim-faithful* Strategic Direction for {year} from the TEXT.
+
+        NON-NEGOTIABLE RULES
+        - Use ONLY the TEXT. No external context or inventions.
+        - Prefer exact phrases/proper nouns from TEXT (business units, markets, programs). Quote short proper nouns when helpful.
+        - Write in **third person**: refer to the entity as the exact company name if present in TEXT, otherwise say **"the company"**.
+        - **Do NOT use first-person pronouns** (“we”, “our”, “us”).
+        - Output **EXACTLY one concise sentence per category** (semicolon allowed). Neutral tone.
+        - Stay on strategic direction; do NOT drift into risk/compliance or financial performance unless the TEXT explicitly ties them to strategy.
+        - If a category is not supported by TEXT, output "N/A".
+        - Return **ONLY raw JSON** (no markdown, no code fences).
+
+        CATEGORIES (use these keys EXACTLY):
+        - "Mergers and Acquisition"
+        - "New technologies"
+        - "Organisational Restructuring"
+
+        CONTENT CHECKLIST (include if present):
+        - M&A: pipeline; bolt-ons vs larger deals; target areas/markets; rationale (growth/adjacency/shareholder value).
+        - New technologies: R&D / product development / new services; notable launches; capability expansions (e.g., AI, space, missile, cyber).
+        - Organisational Restructuring: talent/succession; operating model changes; leadership/committee tweaks; integration; scaling.
+
+        OUTPUT SCHEMA (JSON ONLY):
+        {{
+        "years": [{year}],
+        "strategy": {{
+            "Mergers and Acquisition": {{"{year}": "N/A"}},
+            "New technologies": {{"{year}": "N/A"}},
+            "Organisational Restructuring": {{"{year}": "N/A"}}
+        }}
+        }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+
+# ---------- Section picker (strategy-focused) ----------
+def llm_pick_strategy_sections(jsonl_path: str, top_k: int = 10, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    import json as _json, re
+
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    def _batches(lst, n):
+        i = 0
+        while i < len(lst):
+            yield lst[i:i+n]
+            i += n
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            You will receive section titles with IDs.
+            Select entries most likely to contain **Strategic Direction / Strategy** text (names of business units, future focus, M&A pipelines, technology investment, organisational changes), e.g.:
+            - "Strategy", "Strategic report", "Strategic direction", "Focusing on our strategic imperatives"
+            - "Growth strategy", "M&A", "Acquisitions", "Technology investment", "Innovation", "R&D"
+            - "Operating model", "Organisational changes", "Talent & capability", "Resourcing"
+
+            Avoid: remuneration-only, audit-only, detailed risk-only, or generic sustainability without strategy.
+
+            Return JSON array:
+            [{{"section_id": "...", "score": 0.0-1.0}}, ...]
+
+            Sections:
+            {_json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0,
+                max_tokens=800
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else _json.loads(m.group(0))
+            for obj in arr:
+                sid = str(obj.get("section_id", "")).strip()
+                try:
+                    sc = float(obj.get("score", 0.0))
+                except Exception:
+                    sc = 0.0
+                if sid:
+                    scored.append((sid, sc))
+        except Exception:
+            continue
+
+    if not scored:
+        # Fallback keyword scorer
+        KEY = [
+            "strategy", "strategic report", "strategic direction",
+            "mergers and acquisitions", "m&a", "acquisitions", "bolt-on",
+            "innovation", "technology", "r&d", "product development",
+            "space", "missile", "cyber", "ai", "adjacent markets",
+            "operating model", "organisational", "organization", "talent", "resourcing"
+        ]
+        def _score(t: str) -> float:
+            t2, c = t.lower(), 0
+            for k in KEY:
+                if k in t2: c += 1
+            return float(c)
+        ranked = sorted(
+            sections,
+            key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")),
+            reverse=True
+        )
+        return [str(s.get("section_id") or "") for s in ranked[:top_k] if s.get("section_id")]
+
+    best = {}
+    for sid, sc in scored:
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+    ranked_ids = sorted(best.items(), key=lambda x: x[1], reverse=True)
+    return [sid for sid, _ in ranked_ids[:top_k]]
+
+
+# ---------- Helpers ----------
+def _safe_json_obj_strategy(s: str) -> dict:
+    import json, re
+    m = re.search(r"\{.*\}", s, flags=re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return {}
+
+def _sx_text_or_na(v) -> str:
+    if v is None:
+        return "N/A"
+    if isinstance(v, str):
+        s = v.strip()
+        return "N/A" if s == "" or s.upper() == "N/A" else s
+    try:
+        return str(v)
+    except Exception:
+        return "N/A"
+
+
+def extract_strategic_direction_one(text: str, year: int) -> dict:
+    """
+    Returns:
+    {
+      "years": [year],
+      "strategy": {
+        "Mergers and Acquisition": {"<year>": "..."},
+        "New technologies": {"<year>": "..."},
+        "Organisational Restructuring": {"<year>": "..."}
+      }
+    }
+    """
+    cats = ["Mergers and Acquisition", "New technologies", "Organisational Restructuring"]
+    empty = {"years": [year], "strategy": {c: {str(year): "N/A"} for c in cats}}
+
+    if not (text or "").strip():
+        return empty
+
+    prompt = _strategy_prompt_one(year, text)
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Extract strategic direction faithfully. Output strict JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            max_tokens=900
+        )
+        data = _safe_json_obj_strategy(resp.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"[S6.1] {year}: LLM error: {e}")
+        return empty
+
+    out = {"years": [year], "strategy": {}}
+    for c in cats:
+        val = (data.get("strategy", {}).get(c, {}) or {}).get(str(year), "N/A")
+        out["strategy"][c] = {str(year): _sx_text_or_na(val)}
+    return out
+
+
+# ---------- Merge 2024 + 2023 for final table ----------
+def merge_strategy_two_years(sd_2024: dict, sd_2023: dict) -> dict:
+    cats = ["Mergers and Acquisition", "New technologies", "Organisational Restructuring"]
+    merged = {"years": [2024, 2023], "strategy": {}}
+    for c in cats:
+        y24 = (sd_2024.get("strategy", {}).get(c, {}) or {}).get("2024", "N/A")
+        y23 = (sd_2023.get("strategy", {}).get(c, {}) or {}).get("2023", "N/A")
+        merged["strategy"][c] = {"2024": _sx_text_or_na(y24), "2023": _sx_text_or_na(y23)}
+    return merged
+
+
+# ---------- Pretty print ----------
+def print_strategic_direction_table(sd: dict):
+    print("S6.1: Strategic Direction")
+    print("Perspective | 2024 Report | 2023 Report")
+    print(":-- | :-- | :--")
+    for c in ["Mergers and Acquisition", "New technologies", "Organisational Restructuring"]:
+        y24 = sd.get("strategy", {}).get(c, {}).get("2024", "N/A")
+        y23 = sd.get("strategy", {}).get(c, {}).get("2023", "N/A")
+        print(f"{c} | { _sx_text_or_na(y24) } | { _sx_text_or_na(y23) }")
+        
+        
+# --------------------------- S 6.2 Challenges and Uncertainties -------------------------------------------
+
+def _challenges_prompt_one(year: int, text_block: str) -> str:
+    return f"""
+        You will extract *verbatim-faithful* Challenges & Uncertainties for {year} from TEXT.
+
+        NON-NEGOTIABLE RULES
+        - Use ONLY the TEXT. No external context or inventions.
+        - Third-person; do not use "we".
+        - Output EXACTLY one concise sentence per category (semicolon allowed).
+        - If a category is not supported by TEXT, output "N/A".
+        - Stay on economic and competitive factors only. Do NOT include wars/conflicts/geopolitics unless TEXT explicitly ties them to budget/fiscal constraints.
+        - Return ONLY raw JSON (no markdown).
+
+        CATEGORIES:
+        - "Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability"
+        - "Competitive pressures from both established industry players and new, disruptive market entrants that the company faces"
+
+        OUTPUT:
+        {{
+        "years": [{year}],
+        "challenges": {{
+            "Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability": {{"{year}": "N/A"}},
+            "Competitive pressures from both established industry players and new, disruptive market entrants that the company faces": {{"{year}": "N/A"}}
+        }}
+        }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+
+_BANNED_GEO = ("ukraine", "middle east", "war", "conflict", "geopolit")
+
+def _cx_text_or_na(v) -> str:
+    if v is None: return "N/A"
+    s = str(v).strip()
+    return "N/A" if not s or s.upper()=="N/A" else s
+
+def _scrub_offtopic_econ(s: str) -> str:
+    t = s.lower()
+    if any(k in t for k in _BANNED_GEO) and ("budget" not in t and "fiscal" not in t):
+        return "N/A"
+    return s
+
+def _scrub_offtopic_comp(s: str) -> str:
+    t = s.lower()
+    allow = ("competit","competitor","rival","national champion","new entrant",
+             "disrupt","technology","tech","contract","programme","program",
+             "position","market share","manufactur")
+    if not any(k in t for k in allow):
+        return "N/A"
+    if any(k in t for k in _BANNED_GEO) and ("budget" not in t and "fiscal" not in t):
+        return "N/A"
+    return s
+
+
+def extract_challenges_one(text: str, year: int, model: str = "gpt-4o-mini") -> dict:
+    ECON = "Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability"
+    COMP = "Competitive pressures from both established industry players and new, disruptive market entrants that the company faces"
+
+    empty = {"years":[year], "challenges": {ECON:{str(year):"N/A"}, COMP:{str(year):"N/A"}}}
+    if not (text or "").strip():
+        return empty
+
+    prompt = _challenges_prompt_one(year, text)
+    try:
+        client = OpenAI()
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role":"system","content":"Extract challenges faithfully. Output strict JSON only."},
+                {"role":"user","content":prompt}
+            ],
+            temperature=0,
+            max_tokens=900
+        )
+        import re, json
+        m = re.search(r"\{.*\}", (resp.choices[0].message.content or "").strip(), flags=re.S)
+        data = {} if not m else json.loads(m.group(0))
+    except Exception as e:
+        print(f"[S6.2] {year} LLM error: {e}")
+        return empty
+
+    econ = _cx_text_or_na((data.get("challenges",{}).get(ECON,{}) or {}).get(str(year), "N/A"))
+    comp = _cx_text_or_na((data.get("challenges",{}).get(COMP,{}) or {}).get(str(year), "N/A"))
+
+    econ = _scrub_offtopic_econ(econ)
+    comp = _scrub_offtopic_comp(comp)
+
+    return {"years":[year], "challenges": {ECON:{str(year):econ}, COMP:{str(year):comp}}}
+
+def llm_pick_econ_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Pick sections likely to mention inflation, energy prices, FX, interest rates,
+    defense budget constraints/yearly fluctuations, demand/purchasing power.
+    """
+    import json as _json, re
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    def _batches(lst, n):
+        i = 0
+        while i < len(lst):
+            yield lst[i:i+n]
+            i += n   
+
+    scored = []
+    print("in econ picker")
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            Select entries most likely to contain **economic challenges** (inflation, energy prices, FX, interest rates, budgetary/fiscal constraints, demand/purchasing power), e.g.:
+            - "Financial review", "Macroeconomic environment", "Inflation", "Energy costs", "Foreign exchange", "Interest rates",
+            - "Outlook" sections referring to budgets/defense spend fluctuations,
+            - "Risk" subsections clearly labeled financial/economic.
+
+            Avoid competitive/tech-only, remuneration, sustainability-without-economics, audit opinion-only.
+
+            Return JSON array: [{{"section_id":"...", "score":0.0-1.0}}, ...]
+            Sections:
+            {_json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+
+        try:
+            client = OpenAI()
+            print("trying to get response openai")
+            print(f"length: {len(user_prompt)}")
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0,
+                max_tokens=700
+            )
+            print("got response openai")
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else _json.loads(m.group(0))
+            for obj in arr:
+                sid = str(obj.get("section_id","")).strip()
+                sc  = float(obj.get("score",0.0)) if str(obj.get("score","")).strip() else 0.0
+                if sid:
+                    scored.append((sid, sc))
+        except Exception:
+            continue
+
+    if not scored:
+        KEY = [
+            "financial review","inflation","energy","foreign exchange","fx",
+            "interest rate","econom", "budget","fiscal","outlook","cost pressure",
+            "price increase","salary inflation","purchasing power"
+        ]
+        def _score(t: str) -> float:
+            t2 = t.lower()
+            return float(sum(1 for k in KEY if k in t2))
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [str(s.get("section_id") or "") for s in ranked[:top_k] if s.get("section_id")]
+
+    best = {}
+    for sid, sc in scored:
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+    return [sid for sid, _ in sorted(best.items(), key=lambda x:x[1], reverse=True)[:top_k]]
+
+
+def llm_pick_comp_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Pick sections likely to mention competition, disruptive tech, program positions,
+    contract wins/loss risk, technology leadership, cost-effective manufacture.
+    """
+    import json as _json, re
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    def _batches(lst, n):
+        i = 0
+        while i < len(lst):
+            yield lst[i:i+n]
+            i += n
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            Select entries most likely to contain **competitive pressures**, e.g.:
+            - "Competition", "Competitive landscape/position", "Technology risk", "Market dynamics",
+            - references to "new competitors", "disruptive technologies", "national champions",
+            - risks of losing production contracts or maintaining position on key programmes.
+
+            Avoid purely macro/financial-only, remuneration, governance boilerplate, audit opinion-only.
+
+            Return JSON array: [{{"section_id":"...", "score":0.0-1.0}}, ...]
+            Sections:
+            {_json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+
+        try:
+            client = OpenAI()
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0,
+                max_tokens=700
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else _json.loads(m.group(0))
+            for obj in arr:
+                sid = str(obj.get("section_id","")).strip()
+                sc  = float(obj.get("score",0.0)) if str(obj.get("score","")).strip() else 0.0
+                if sid:
+                    scored.append((sid, sc))
+        except Exception:
+            continue
+
+    if not scored:
+        # Fallback keywords tuned for COMP
+        KEY = [
+            "competition","competitive","market position","market share",
+            "disruptive","new competitors","national champions","technology risk",
+            "programme","program","production contracts","manufactur"
+        ]
+        def _score(t: str) -> float:
+            t2 = t.lower()
+            return float(sum(1 for k in KEY if k in t2))
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [str(s.get("section_id") or "") for s in ranked[:top_k] if s.get("section_id")]
+
+    best = {}
+    for sid, sc in scored:
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+    return [sid for sid, _ in sorted(best.items(), key=lambda x:x[1], reverse=True)[:top_k]]
+
+
+_BANNED_GEO = ("ukraine", "middle east", "war", "conflict", "geopolit")
+
+def _cx_text_or_na(v) -> str:
+    if v is None: return "N/A"
+    s = str(v).strip()
+    return "N/A" if not s or s.upper()=="N/A" else s
+
+def _scrub_offtopic_econ(s: str) -> str:
+    t = s.lower()
+    if any(k in t for k in _BANNED_GEO) and ("budget" not in t and "fiscal" not in t):
+        return "N/A"
+    return s
+
+ECON_KEY = "Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability"
+COMP_KEY = "Competitive pressures from both established industry players and new, disruptive market entrants that the company faces"
+
+def _safe_json_obj(s: str) -> dict:
+    import json, re
+    m = re.search(r"\{.*\}", s, flags=re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return {}
+
+def _normalize_na(v) -> str:
+    if v is None: return "N/A"
+    s = str(v).strip()
+    return "N/A" if not s or s.upper() == "N/A" else s
+
+def _econ_prompt_one(year: int, text_block: str) -> str:
+    return f"""
+        You will extract *verbatim-faithful* ECONOMIC CHALLENGES for {year} from TEXT.
+
+        RULES
+        - Use ONLY the TEXT. No external context or inventions.
+        - Third-person (no "we").
+        - Output concise sentences; neutral tone.
+        - If not supported by TEXT, output "N/A".
+        - Focus on: inflation, energy prices, FX, interest rates, salary inflation, demand/purchasing power, budget/fiscal constraints.
+
+        OUTPUT (JSON ONLY):
+        {{ "years": [{year}], "value": {{"{year}": "N/A"}} }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+def _comp_prompt_one(year: int, text_block: str) -> str:
+    return f"""
+        You will extract *verbatim-faithful* COMPETITIVE PRESSURES for {year} from TEXT.
+
+        RULES
+        - Use ONLY the TEXT. No external context or inventions.
+        - Third-person (no "we").
+        - Output concise sentences; neutral tone.
+        - If not supported by TEXT, output "N/A".
+        - Focus on: competitors/new entrants, disruptive tech, loss of contracts/positions on programmes, tech leadership, cost-effective manufacture.
+
+        OUTPUT (JSON ONLY):
+        {{ "years": [{year}], "value": {{"{year}": "N/A"}} }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+def extract_econ_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
+    if not (text or "").strip():
+        return "N/A"
+    prompt = _econ_prompt_one(year, text)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "Extract economic challenges faithfully. Output strict JSON only."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0,
+        max_tokens=800
+    )
+    data = _safe_json_obj((resp.choices[0].message.content or "").strip())
+    return _normalize_na((data.get("value") or {}).get(str(year), "N/A"))
+
+def extract_comp_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
+    if not (text or "").strip():
+        return "N/A"
+    prompt = _comp_prompt_one(year, text)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "Extract competitive pressures faithfully. Output strict JSON only."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0,
+        max_tokens=800
+    )
+    data = _safe_json_obj((resp.choices[0].message.content or "").strip())
+    return _normalize_na((data.get("value") or {}).get(str(year), "N/A"))
+
+
+# --------------------------- S 6.3 Innovation and Development Plans -------------------------------------------
+
+import re, json
+def _safe_json_obj(s: str) -> dict:
+    m = re.search(r"\{.*\}", s, flags=re.S)
+    if not m: return {}
+    try: return json.loads(m.group(0))
+    except Exception: return {}
+
+def _normalize_na(v) -> str:
+    if v is None: return "N/A"
+    s = str(v).strip()
+    return "N/A" if not s or s.upper()=="N/A" else s
+
+def _batches(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i+n]
+
+# ---- LLM pickers (R&D vs Launch) ----
+def llm_pick_rd_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Find sections likely to contain R&D investments / innovation programs.
+    Examples: "R&D", "Innovation", "Technology development", "Product development", "Research".
+    """
+    import json as _json
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            Select entries most likely to contain **R&D investments/innovation** details:
+            - Titles like: "R&D", "Research & development", "Innovation", "Technology development", "Product development", "Strategic report" subsections about innovation.
+            Avoid: pure marketing, remuneration, audit opinion-only.
+
+            Return JSON array: [{{"section_id":"...", "score":0.0-1.0}}, ...]
+            Sections:
+            {json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+        try:
+            client = OpenAI()
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0, max_tokens=600
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else json.loads(m.group(0))
+            for obj in arr:
+                sid = str(obj.get("section_id","")).strip()
+                try: sc = float(obj.get("score",0.0))
+                except Exception: sc = 0.0
+                if sid: scored.append((sid, sc))
+        except Exception:
+            continue
+
+    if not scored:
+        # fallback keywords
+        KEY = ["r&d", "research", "innovation", "technology", "product development", "new product development"]
+        def _score(t: str) -> float:
+            tl = t.lower()
+            return float(sum(1 for k in KEY if k in tl))
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [s.get("section_id") for s in ranked[:top_k] if s.get("section_id")]
+
+    best = {}
+    for sid, sc in scored:
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+    return [sid for sid, _ in sorted(best.items(), key=lambda x:x[1], reverse=True)[:top_k]]
+
+
+def llm_pick_launch_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+    """
+    Find sections likely to contain new product launches / rollouts.
+    Examples: "New products", "Product launches", "Portfolio expansion", "New offerings".
+    """
+    import json as _json
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = _json.loads(line.strip())
+            except Exception:
+                continue
+            sid = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid or title:
+                sections.append({"section_id": sid, "title": title})
+
+    if not sections:
+        return []
+
+    scored = []
+    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    for chunk in _batches(sections, batch_size):
+        compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
+        user_prompt = f"""
+            Select entries most likely to contain **new product launches/portfolio updates**:
+            - Titles like: "New products", "Product launches", "Portfolio update/expansion", "Innovation highlights", "Go-to-market".
+            Avoid: generic strategy without explicit launches, remuneration, audit.
+
+            Return JSON array: [{{"section_id":"...", "score":0.0-1.0}}, ...]
+            Sections:
+            {json.dumps(compact, ensure_ascii=False)}
+            """.strip()
+        try:
+            client = OpenAI()
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system_msg},
+                          {"role":"user","content":user_prompt}],
+                temperature=0, max_tokens=600
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            m = re.search(r"\[\s*(?:\{|\[).*?\]\s*", raw, flags=re.S)
+            arr = [] if not m else json.loads(m.group(0))
+            for obj in arr:
+                sid = str(obj.get("section_id","")).strip()
+                try: sc = float(obj.get("score",0.0))
+                except Exception: sc = 0.0
+                if sid: scored.append((sid, sc))
+        except Exception:
+            continue
+
+    if not scored:
+        KEY = ["new product", "product launch", "launched", "portfolio", "rollout", "introduced"]
+        def _score(t: str) -> float:
+            tl = t.lower()
+            return float(sum(1 for k in KEY if k in tl))
+        ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
+        return [s.get("section_id") for s in ranked[:top_k] if s.get("section_id")]
+
+    best = {}
+    for sid, sc in scored:
+        if sid not in best or sc > best[sid]:
+            best[sid] = sc
+    return [sid for sid, _ in sorted(best.items(), key=lambda x:x[1], reverse=True)[:top_k]]
+
+# ---- Extraction prompts (one call per category per year) ----
+def _rd_prompt_one(year: int, text_block: str) -> str:
+    co = _company_or_generic()
+    return f"""
+        You will EXTRACT R&D / INNOVATION INVESTMENTS for {co} for {year} from TEXT_{year} ONLY. R&D investments, with a focus on advancing technology, improving products, and creating new solutions to cater to market trends
+
+        OFFICIAL-STYLE REQUIREMENTS
+        - Use ONLY TEXT_{year}. No external knowledge or inference.
+        - Write in third-person and refer to the company as "{co}" (never "we").
+        - Output 1-2 concise sentence in a neutral, disclosure tone that mirrors annual-report style.
+        - Prioritize THEMATIC CAPABILITY VECTORS over money/capex: e.g., sensors, communications, cyber, AI, EW, OSINT, ML, information security, etc.
+        - Include named business units or programs when present.
+        - Treat R&D/innovation as capability development, technical talent investment, and product/service portfolio advancement.
+        - EXCLUDE operations-only items: manufacturing capacity builds, plant/facility projects, revenue targets, contracts, or generic process methods (e.g., “rapid prototyping”) unless explicitly tied to a new capability.
+        - If the text does not support an answer, output "N/A".
+        - Do NOT copy or mix content from other years.
+        - Avoid marketing adjectives unless verbatim in TEXT_{year}.
+
+        OUTPUT (JSON ONLY, exactly this schema):
+        {{ "years": [{year}], "value": {{"{year}": "N/A"}} }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+def _launch_prompt_one(year: int, text_block: str) -> str:
+    co = _company_or_generic()
+    return f"""
+        You will EXTRACT NEW PRODUCT/SERVICE LAUNCHES or CLEAR NEW CAPABILITIES for {co} for {year} from TEXT_{year} ONLY. New product launches, emphasizing the company’s commitment to continuously introducing differentiated products.
+
+        OFFICIAL-STYLE REQUIREMENTS
+        - Use ONLY TEXT_{year}. No external knowledge or inference.
+        - Write in third-person and refer to the company as "{co}" (never "we").
+        - Output 1-2 concise sentence in a neutral, disclosure tone that mirrors annual-report style.
+        - Prefer explicit launch language (“launched”, “introduced”, “released”, “rollout”). If not present but the text clearly indicates a FIRST-TIME capability addition, summarize it as a capability introduction.
+        - Include named products/platforms/units when present.
+        - EXCLUDE items that are not launches/capability introductions: capacity/facility builds, contracts/awards, generic process changes (e.g., “rapid prototyping”) unless explicitly tied to a new capability.
+        - If the text does not support an answer, output "N/A".
+        - Do NOT copy or mix content from other years.
+        - Avoid marketing adjectives unless verbatim in TEXT_{year}.
+
+        OUTPUT (JSON ONLY, exactly this schema):
+        {{ "years": [{year}], "value": {{"{year}": "N/A"}} }}
+
+        TEXT_{year}:
+        {text_block}
+        """.strip()
+
+
+def extract_rd_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
+    if not (text or "").strip(): return "N/A"
+    client = OpenAI()
+    prompt = _rd_prompt_one(year, text)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role":"system", "content":"Extract R&D investments faithfully. Output strict JSON only."},
+                  {"role":"user", "content":prompt}],
+        temperature=0, max_tokens=700
+    )
+    data = _safe_json_obj((resp.choices[0].message.content or "").strip())
+    return _normalize_na((data.get("value") or {}).get(str(year), "N/A"))
+
+def extract_launch_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
+    if not (text or "").strip(): return "N/A"
+    client = OpenAI()
+    prompt = _launch_prompt_one(year, text)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role":"system", "content":"Extract new product launches faithfully. Output strict JSON only."},
+                  {"role":"user", "content":prompt}],
+        temperature=0, max_tokens=700
+    )
+    data = _safe_json_obj((resp.choices[0].message.content or "").strip())
+    return _normalize_na((data.get("value") or {}).get(str(year), "N/A"))
 
     
 # -----------------------------------------------------------------------------------------
 # ----------------- test extraction -------------------------------------------------------
 # -----------------------------------------------------------------------------------------
-def extract(md_file1: str, md_file2):
+
+import tempfile, shutil, re
+from pathlib import Path
+from report_generator import DDRGenerator
+
+def _slugify(name: str) -> str:
+    name = (name or "").strip() or "report"
+    s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return s or "report"
+
+def _atomic_write(text: str, out_path: str):
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as tmp:
+        tmp.write(text)
+        tmp_path = tmp.name
+    shutil.move(tmp_path, out_path) 
+
+def save_partial_report(report, output_path: str, currency_code: str = "USD"):
+    """
+    Safely render and save the current report state to disk.
+    Uses the DDRGenerator so formatting is identical to the final output.
+    """
+    try:
+        gen = DDRGenerator(report, currency_code=currency_code)
+        markdown = gen.generate_full_report()
+        _atomic_write(markdown, output_path)
+        print(f"[partial-save] Wrote snapshot to: {output_path}")
+    except Exception as e:
+        print(f"[partial-save][WARN] Failed to write snapshot: {e}")
+
+# -----------------------------------------------------------------------------------------
+def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_lang: Lang = Lang.EN):
+    
+    start_time = time.time()
+    print(f"⏱️  Starting extraction pipeline at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
     report = CompanyReport()
+    report.meta_output_lang = str(target_lang)  
+    
     md_path_2024 = Path(md_file1)
     md_path_2023 = Path(md_file2)
     md_file_2024 = md_path_2024.stem
     md_file_2023 = md_path_2023.stem 
     md_file_path_2024 = f"data/parsed/{md_file_2024}.md"
     md_file_path_2023 = f"data/parsed/{md_file_2023}.md"
+    
+    def checkpoint(section_label: str):
+        print(f"💾 Saving partial after: {section_label}")
+        save_partial_report(report, partial_path, currency_code=currency_code)
 
     # load 2024 and 2023 markdown files 
     try: 
@@ -3952,7 +5436,9 @@ def extract(md_file1: str, md_file2):
         print(f"Error reading file: {e}")
         return
 
-    print("\n=== Testing Advanced Segmentation ===")
+    print("\n" + "="*60)
+    print("🔄 PROCESSING: Markdown Segmentation & Embeddings")
+    print("="*60)
     # Load markdown content first
     normalize_and_segment_markdown(md_text_2024, Path(md_file_2024).stem)
     normalize_and_segment_markdown(md_text_2023, Path(md_file_2023).stem)
@@ -3965,21 +5451,33 @@ def extract(md_file1: str, md_file2):
     build_section_embeddings(jsonl_file_2024_path, f"data/parsed/{Path(md_file_2024).stem}.md")
     build_section_embeddings(jsonl_file_2023_path, f"data/parsed/{Path(md_file_2023).stem}.md")
 
-    # --- S1.1: Basic Information (2024 ONLY) --- 
+    print("\n" + "="*60)
+    print("📋 PROCESSING: S1.1 - Basic Information (2024 ONLY)")
+    print("="*60)
     company_name = query_company_name(jsonl_file_2024_path, md_file_2024)
     establishment_date = query_establishment_date(jsonl_file_2024_path, md_file_2024)
     company_hq = query_company_hq(jsonl_file_2024_path, md_file_2024)
+    # ADD CURRENCY AS GLOBAL VALUE
+    
     # save
     report.basic_info.company_name = company_name
     report.basic_info.establishment_date = establishment_date
     report.basic_info.headquarters_location = company_hq
+    set_company_name(company_name)
+    
+    slug = _slugify(company_name)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    partial_path = f"partial_reports/{slug}_{timestamp}_report.md"
+    print(f"📁 Report will be saved as: {partial_path}")
 
-    # --- S1.2: Core Competencies (2024 + 2023) --- 
+    print("\n" + "="*60)
+    print("🎯 PROCESSING: S1.2 - Core Competencies (2024 + 2023)")
+    print("="*60)
     core_comp_2024 = extract_core_competencies(md_file_2024)
     core_comp_2023 = extract_core_competencies(md_file_2023)
 
     core_comp = merge_core_competencies(core_comp_2024, core_comp_2023)
-    # save
+    # # save
     report.core_competencies.innovation_advantages.report_2024 = str((core_comp.get("Innovation Advantages", {}) or {}).get("2024", "N/A") or "N/A")
     report.core_competencies.innovation_advantages.report_2023 = str((core_comp.get("Innovation Advantages", {}) or {}).get("2023", "N/A") or "N/A")
     report.core_competencies.product_advantages.report_2024 = str((core_comp.get("Product Advantages", {}) or {}).get("2024", "N/A") or "N/A")
@@ -3989,269 +5487,257 @@ def extract(md_file1: str, md_file2):
     report.core_competencies.reputation_ratings.report_2024 = str((core_comp.get("Reputation Ratings", {}) or {}).get("2024", "N/A") or "N/A")
     report.core_competencies.reputation_ratings.report_2023 = str((core_comp.get("Reputation Ratings", {}) or {}).get("2023", "N/A") or "N/A")
 
-    # Render the final table
-    print("\n=== S1.2: Core Competencies ===")
+    print("✅ S1.2 Core Competencies completed")
     for perspective in ["Innovation Advantages", "Product Advantages", "Brand Recognition", "Reputation Ratings"]:
-        print(perspective)
-        print("2024:", core_comp[perspective]["2024"])
-        print("2023:", core_comp[perspective]["2023"])
-        print()
-            
-    # --- S1.3: Mission & Vision (2024 ONLY) --- 
+        print(f"   {perspective}: 2024 ✓ | 2023 ✓")
+
+    print("\n" + "="*60)
+    print("🎯 PROCESSING: S1.3 - Mission & Vision (2024 ONLY)")
+    print("="*60)
     mv = extract_mission_vision_values(jsonl_file_2024_path, md_file_2024)
-    print(f"Mission: {mv['mission']}")
-    print(f"Vision: {mv['vision']}")
-    print(f"Core Values: {mv['core_values']}")
+    print(f"  Mission: {mv['mission']}")
+    print(f"  Vision: {mv['vision']}")
+    print(f"  Core Values: {mv['core_values']}")
     # save
     report.mission_vision.mission_statement = mv['mission']
     report.mission_vision.vision_statement = mv['vision']
     report.mission_vision.core_values = mv['core_values']
+    print("✅ COMPLETED: S1.3 - Mission & Vision")
+    checkpoint("Section 1 - Company Overview (S1.1-S1.3)")
 
-    # --- S2.1: Income Statement (2024 + 2023) ---  
-    # do one for 2023, then one for 2024, then merge
-    # is_topK_2024 = llm_pick_income_statements_sections(jsonl_file_2024_path, top_k=25)
-    # is_topK_2023 = llm_pick_income_statements_sections(jsonl_file_2023_path, top_k=25)
-    # windows_info_2024, income_text_2024 = assemble_financial_statement_windows_from_ids(is_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
-    # windows_info_2023, income_text_2023 = assemble_financial_statement_windows_from_ids(is_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
-    # income_2024 = extract_income_statement(income_text_2024, years=[2024, 2023, 2022])
-    # income_2023 = extract_income_statement(income_text_2023, years=[2024, 2023, 2022])
+    print("\n" + "="*60)
+    print("💰 PROCESSING: S2.1 - Income Statement (2024 + 2023)")
+    print("="*60)
+    is_topK_2024 = llm_pick_income_statements_sections(jsonl_file_2024_path, top_k=25)
+    is_topK_2023 = llm_pick_income_statements_sections(jsonl_file_2023_path, top_k=25)
+    windows_info_2024, income_text_2024 = assemble_financial_statement_windows_from_ids(is_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    windows_info_2023, income_text_2023 = assemble_financial_statement_windows_from_ids(is_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    income_2024 = extract_income_statement(income_text_2024, years=[2024, 2023, 2022])
+    income_2023 = extract_income_statement(income_text_2023, years=[2024, 2023, 2022])
 
-    # merged_income = merge_income_statements_per_year_priority(income_2024, income_2023, years=[2024, 2023, 2022], debug=True)
+    merged_income = merge_income_statements_per_year_priority(income_2024, income_2023, years=[2024, 2023, 2022], debug=True)
     
-
-    # print("\n=== Merged Income Statement ===")
     # print_income_statement_table(merged_income)
-    
-    # for field, values in merged_income["fields"].items():
-    #     field_obj = getattr(report.income_statement, field.replace(" ", "_").lower(), None)
-    #     if isinstance(field_obj, FinancialData):
-    #         field_obj.year_2024 = values.get("2024", "N/A")
-    #         field_obj.year_2023 = values.get("2023", "N/A")
-    #         field_obj.year_2022 = values.get("2022", "N/A")
-    #         field_obj.multiplier = merged_income.get("multiplier", "Units")
-    #         field_obj.currency = merged_income.get("currency", "USD")
             
-    # --- S2.2: Balance Sheet ---  
-    # bs_topK_2024 = llm_pick_balance_sheet_sections(jsonl_file_2024_path, top_k=5)
-    # bs_topK_2023 = llm_pick_balance_sheet_sections(jsonl_file_2023_path, top_k=5)
-
-    # bs_win_2024, bs_text_2024 = assemble_financial_statement_windows_from_ids(bs_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
-    # bs_win_2023, bs_text_2023 = assemble_financial_statement_windows_from_ids(bs_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    for field, values in merged_income["fields"].items():
+        income_alias = {"income tax expense(benefit)": "income_tax_expense"}
+        attr_key = field.replace(" ", "_").lower()
+        attr_key = income_alias.get(attr_key, attr_key)  # apply alias if present
+        field_obj = getattr(report.income_statement, attr_key, None)
+        if isinstance(field_obj, FinancialData):
+            field_obj.year_2024 = values.get("2024", "N/A")
+            field_obj.year_2023 = values.get("2023", "N/A")
+            field_obj.year_2022 = values.get("2022", "N/A")
+            field_obj.multiplier = merged_income.get("multiplier", "Units")
+            field_obj.currency = merged_income.get("currency", "USD")      
     
-    # balance_2024 = extract_balance_sheet(bs_text_2024, years=[2024, 2023, 2022])
-    # balance_2023 = extract_balance_sheet(bs_text_2023, years=[2024, 2023, 2022])
+    print("✅ S2.1 Income Statement completed")
 
-    # print("\n=== Balance Sheet 2024 Extraction ===")
+    print("\n" + "="*60)
+    print("💰 PROCESSING: S2.2 - Balance Sheet (2024 + 2023)")
+    print("="*60)
+    bs_topK_2024 = llm_pick_balance_sheet_sections(jsonl_file_2024_path, top_k=5)
+    bs_topK_2023 = llm_pick_balance_sheet_sections(jsonl_file_2023_path, top_k=5)
+
+    _, bs_text_2024 = assemble_financial_statement_windows_from_ids(bs_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    _, bs_text_2023 = assemble_financial_statement_windows_from_ids(bs_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    
+    balance_2024 = extract_balance_sheet(bs_text_2024, years=[2024, 2023, 2022])
+    balance_2023 = extract_balance_sheet(bs_text_2023, years=[2024, 2023, 2022])
+
     # print_balance_sheet_table(balance_2024)
-    # print("\n=== Balance Sheet 2023 Extraction ===")
     # print_balance_sheet_table(balance_2023)
 
-    # merged_balance = merge_balance_sheet_per_year_priority(balance_2024, balance_2023, years=[2024, 2023, 2022], debug=True)
+    merged_balance = merge_balance_sheet_per_year_priority(balance_2024, balance_2023, years=[2024, 2023, 2022], debug=True)
 
-    # print("\n=== Merged Balance Sheet ===")
     # print_balance_sheet_table(merged_balance)
 
-    # for field, values in merged_balance["fields"].items():
-    #     attr_name = field.replace(" ", "_").replace("'", "").replace("-", "_").lower()
-    #     field_obj = getattr(report.balance_sheet, attr_name, None)
-    #     if isinstance(field_obj, FinancialData):
-    #         field_obj.year_2024 = values.get("2024", "N/A")
-    #         field_obj.year_2023 = values.get("2023", "N/A")
-    #         field_obj.year_2022 = values.get("2022", "N/A")
-    #         field_obj.multiplier = merged_balance.get("multiplier", "Units")
-    #         field_obj.currency = merged_balance.get("currency", "USD")
+    for field, values in merged_balance["fields"].items():
+        attr_name = field.replace(" ", "_").replace("'", "").replace("-", "_").lower()
+        field_obj = getattr(report.balance_sheet, attr_name, None)
+        if isinstance(field_obj, FinancialData):
+            field_obj.year_2024 = values.get("2024", "N/A")
+            field_obj.year_2023 = values.get("2023", "N/A")
+            field_obj.year_2022 = values.get("2022", "N/A")
+            field_obj.multiplier = merged_balance.get("multiplier", "Units")
+            field_obj.currency = merged_balance.get("currency", "USD")
 
+    print("✅ S2.2 Balance Sheet completed")
 
-    # --- S2.3: Cash Flow Statement ---  
-    # cf_topK_2024 = llm_pick_cash_flow_sections(jsonl_file_2024_path, top_k=25)
-    # cf_topK_2023 = llm_pick_cash_flow_sections(jsonl_file_2023_path, top_k=25)
+    print("\n" + "="*60)
+    print("💰 PROCESSING: S2.3 - Cash Flow Statement (2024 + 2023)")
+    print("="*60)
+    cf_topK_2024 = llm_pick_cash_flow_sections(jsonl_file_2024_path, top_k=25)
+    cf_topK_2023 = llm_pick_cash_flow_sections(jsonl_file_2023_path, top_k=25)
 
-    # # 2) assemble text windows from IDs
-    # cf_win_2024, cf_text_2024 = assemble_financial_statement_windows_from_ids(
-    #     cf_topK_2024, jsonl_file_2024_path, md_file_path_2024,
-    #     window_size=15, one_based_lines=True, choose_first_match_only=True
-    # )
-    # cf_win_2023, cf_text_2023 = assemble_financial_statement_windows_from_ids(
-    #     cf_topK_2023, jsonl_file_2023_path, md_file_path_2023,
-    #     window_size=15, one_based_lines=True, choose_first_match_only=True
-    # )
+    cf_win_2024, cf_text_2024 = assemble_financial_statement_windows_from_ids(
+        cf_topK_2024, jsonl_file_2024_path, md_file_path_2024,
+        window_size=15, one_based_lines=True, choose_first_match_only=True
+    )
+    cf_win_2023, cf_text_2023 = assemble_financial_statement_windows_from_ids(
+        cf_topK_2023, jsonl_file_2023_path, md_file_path_2023,
+        window_size=15, one_based_lines=True, choose_first_match_only=True
+    )
 
-    # # 3) extract per-year
-    # cashflow_2024 = extract_cash_flow_statement(cf_text_2024, years=[2024, 2023, 2022])
-    # cashflow_2023 = extract_cash_flow_statement(cf_text_2023, years=[2024, 2023, 2022])
+    cashflow_2024 = extract_cash_flow_statement(cf_text_2024, years=[2024, 2023, 2022])
+    cashflow_2023 = extract_cash_flow_statement(cf_text_2023, years=[2024, 2023, 2022])
 
-    # print("\n=== Cash Flow 2024 Extraction ===")
     # print_cash_flow_table(cashflow_2024)
-    # print("\n=== Cash Flow 2023 Extraction ===")
     # print_cash_flow_table(cashflow_2023)
 
-    # # 4) merge with 2024-first policy
-    # merged_cashflow = merge_cash_flow_per_year_priority(cashflow_2024, cashflow_2023, years=[2024, 2023, 2022], debug=True)
+    merged_cashflow = merge_cash_flow_per_year_priority(cashflow_2024, cashflow_2023, years=[2024, 2023, 2022], debug=True)
 
-    # print("\n=== Merged Cash Flow Statement ===")
     # print_cash_flow_table(merged_cashflow)
 
-    # # 5) bind into CompanyReport so DDRGenerator renders S2.3
-    # # Map fields -> dataclass attributes:
-    # mapping = {
-    #     "Net Cash Flow from Operations": "net_cash_from_operations",
-    #     "Net Cash Flow from Investing": "net_cash_from_investing",
-    #     "Net Cash Flow from Financing": "net_cash_from_financing",
-    #     "Net Increase/Decrease in Cash": "net_increase_decrease_cash",
-    #     "Dividends": "dividends",
-    # }
+    mapping = {
+        "Net Cash Flow from Operations": "net_cash_from_operations",
+        "Net Cash Flow from Investing": "net_cash_from_investing",
+        "Net Cash Flow from Financing": "net_cash_from_financing",
+        "Net Increase/Decrease in Cash": "net_increase_decrease_cash",
+        "Dividends": "dividends",
+    }
 
-    # for field_name, attr in mapping.items():
-    #     values = merged_cashflow["fields"].get(field_name, {})
-    #     field_obj = getattr(report.cash_flow_statement, attr, None)
-    #     if isinstance(field_obj, FinancialData):
-    #         field_obj.year_2024 = values.get("2024", "N/A")
-    #         field_obj.year_2023 = values.get("2023", "N/A")
-    #         field_obj.year_2022 = values.get("2022", "N/A")
-    #         field_obj.multiplier = merged_cashflow.get("multiplier", "Units")
-    #         field_obj.currency = merged_cashflow.get("currency", "USD")
+    for field_name, attr in mapping.items():
+        values = merged_cashflow["fields"].get(field_name, {})
+        field_obj = getattr(report.cash_flow_statement, attr, None)
+        if isinstance(field_obj, FinancialData):
+            field_obj.year_2024 = values.get("2024", "N/A")
+            field_obj.year_2023 = values.get("2023", "N/A")
+            field_obj.year_2022 = values.get("2022", "N/A")
+            field_obj.multiplier = merged_cashflow.get("multiplier", "Units")
+            field_obj.currency = merged_cashflow.get("currency", "USD")
+            
 
     # --- S2.4: Key Financial Metrics ---  
+    print("🔄 PROCESSING: S2.4 - Key Financial Metrics")
     
-    # example table to test compute_key_metrics_from_tables()
-    merged_income = {
-        "years": [2024, 2023, 2022],
-        "multiplier": "Millions",
-        "currency": "GBP",
-        "fields": {
-            "Revenue": {"2024": 510.4, "2023": 472.6, "2022": 442.8},
-            "Cost of Goods Sold": {"2024": "N/A", "2023": "N/A", "2022": "N/A"},
-            "Gross Profit": {"2024": "N/A", "2023": "N/A", "2022": "N/A"},
-            "Operating Expense": {"2024": 452.3, "2023": 427.2, "2022": 451.6},
-            "Operating Income": {"2024": 58.1, "2023": 45.4, "2022": 49.4},
-            "Net Profit": {"2024": 39.5, "2023": 5.4, "2022": 47.4},
-            "Income before income taxes": {"2024": 53.3, "2023": 44.1, "2022": 47.9},
-            "Income tax expense(benefit)": {"2024": 10.6, "2023": 6.4, "2022": 3.5},
-            "Interest Expense": {"2024": 4.8, "2023": 1.3, "2022": 1.5},
-        },
-    }
-
-    merged_balance = {
-        "years": [2024, 2023, 2022],
-        "multiplier": "Millions",
-        "currency": "GBP",
-        "fields": {
-            "Total Assets": {"2024": 692.1, "2023": 596.4, "2022": 620.1},
-            "Current Assets": {"2024": 264.0, "2023": 183.7, "2022": 181.2},
-            "Non-Current Assets": {"2024": 422.3, "2023": 412.7, "2022": 438.9},
-            "Total Liabilities": {"2024": "(335.8)", "2023": "(217.9)", "2022": "(202.0)"},
-            "Current Liabilities": {"2024": "(221.9)", "2023": "(142.1)", "2022": "(113.7)"},
-            "Non-Current Liabilities": {"2024": "(113.9)", "2023": "(75.8)", "2022": "(88.3)"},
-            "Shareholders' Equity": {"2024": 356.3, "2023": 378.5, "2022": 418.1},
-            "Retained Earnings": {"2024": 52.3, "2023": 62.9, "2022": 87.2},
-            "Total Equity and Liabilities": {"2024": 692.1, "2023": 596.4, "2022": 620.1},
-            "Inventories": {"2024": 127.1, "2023": 101.7, "2022": 99.6},
-            "Prepaid Expenses": {"2024": "N/A", "2023": "N/A", "2022": "N/A"},
-        },
-    }
-
-    merged_cashflow = {
-        "years": [2024, 2023, 2022],
-        "multiplier": "Millions",
-        "currency": "GBP",
-        "fields": {
-            "Net Cash Flow from Operations": {"2024": 81.0, "2023": 65.9, "2022": 80.5},
-            "Net Cash Flow from Investing": {"2024": "(47.6)", "2023": "(39.4)", "2022": "(30.5)"},
-            "Net Cash Flow from Financing": {"2024": "(37.3)", "2023": "(40.2)", "2022": "(35.8)"},
-            "Net Increase/Decrease in Cash": {"2024": "(3.9)", "2023": "(13.7)", "2022": 14.2},
-            "Dividends": {"2024": "(19.6)", "2023": "(17.3)", "2022": "(14.4)"},
-        },
-    }
-
-    # metrics = compute_key_metrics_from_tables(merged_income, merged_balance, merged_cashflow, years=[2024, 2023, 2022])
-
-    # # Write into your dataclass
-    # for field, values in metrics["fields"].items():
-    #     attr = field.lower().replace(" ", "_").replace("-", "_").replace("/", "_")
-    #     field_obj = getattr(report.key_financial_metrics, attr, None)
-    #     if isinstance(field_obj, FinancialData):
-    #         field_obj.year_2024 = values.get("2024", "N/A")
-    #         field_obj.year_2023 = values.get("2023", "N/A")
-    #         field_obj.year_2022 = values.get("2022", "N/A")
-    #         field_obj.multiplier = metrics.get("multiplier", "Percent")
-    #         field_obj.currency = metrics.get("currency", "N/A")
-
-    # metrics = compute_key_metrics_from_tables(merged_income, merged_balance, merged_cashflow, years=[2024, 2023, 2022])
-    # print_key_metrics_table(metrics)    
+    metrics = compute_key_metrics_from_tables(merged_income, merged_balance, merged_cashflow, years=[2024, 2023, 2022])
+    
+    for field, values in metrics["fields"].items():
+        attr = field.lower().replace(" ", "_").replace("-", "_").replace("/", "_")
+        field_obj = getattr(report.key_financial_metrics, attr, None)
+        if isinstance(field_obj, FinancialData):
+            field_obj.year_2024 = values.get("2024", "N/A")
+            field_obj.year_2023 = values.get("2023", "N/A")
+            field_obj.year_2022 = values.get("2022", "N/A")
+            field_obj.multiplier = metrics.get("multiplier", "Percent")
+            field_obj.currency = metrics.get("currency", "N/A")
+            
+    print_key_metrics_table(metrics)    
+    print("✅ COMPLETED: S2.4 - Key Financial Metrics")
+    
     
     # --- S2.5: Operating Performance ---  
-    # op_topK_2024 = llm_pick_operating_performance_sections(jsonl_file_2024_path, top_k=15)
-    # op_topK_2023 = llm_pick_operating_performance_sections(jsonl_file_2023_path, top_k=15)
+    print("🔄 PROCESSING: S2.5 - Operating Performance")
+    op_topK_2024 = llm_pick_operating_performance_sections(jsonl_file_2024_path, top_k=15)
+    op_topK_2023 = llm_pick_operating_performance_sections(jsonl_file_2023_path, top_k=15)
 
-    # win_2024, oper_text_2024 = assemble_financial_statement_windows_from_ids(
-    #     op_topK_2024, jsonl_file_2024_path, md_file_path_2024,
-    #     window_size=15, one_based_lines=True, choose_first_match_only=True
-    # )
-    # win_2023, oper_text_2023 = assemble_financial_statement_windows_from_ids(
-    #     op_topK_2023, jsonl_file_2023_path, md_file_path_2023,
-    #     window_size=15, one_based_lines=True, choose_first_match_only=True
-    # )
+    _, oper_text_2024 = assemble_financial_statement_windows_from_ids(
+        op_topK_2024, jsonl_file_2024_path, md_file_path_2024,
+        window_size=15, one_based_lines=True, choose_first_match_only=True
+    )
+    _, oper_text_2023 = assemble_financial_statement_windows_from_ids(
+        op_topK_2023, jsonl_file_2023_path, md_file_path_2023,
+        window_size=15, one_based_lines=True, choose_first_match_only=True
+    )
 
-    # oper_2024 = extract_operating_performance(oper_text_2024, years=[2024, 2023, 2022])
-    # oper_2023 = extract_operating_performance(oper_text_2023, years=[2024, 2023, 2022])
+    oper_2024 = extract_operating_performance(oper_text_2024, years=[2024, 2023, 2022])
+    oper_2023 = extract_operating_performance(oper_text_2023, years=[2024, 2023, 2022])
 
-    # print("\n=== Operating Performance 2024 Extraction ===")
-    # print_operating_performance_table(oper_2024)
-    # print("\n=== Operating Performance 2023 Extraction ===")
-    # print_operating_performance_table(oper_2023)
+    merged_operating_performance = merge_operating_performance_per_year_priority(oper_2024, oper_2023, years=[2024, 2023, 2022], debug=True)
 
-    # merged_operating_performance = merge_operating_performance_per_year_priority(oper_2024, oper_2023, years=[2024, 2023, 2022], debug=True)
-
-    # print("\n=== S2.5 Merged Operating Performance ===")
     # print_operating_performance_table(merged_operating_performance)
+    
+    opf = report.operating_performance
+
+    rbps = merged_operating_performance["fields"].get("Revenue by Product/Service", {})
+    rbgr = merged_operating_performance["fields"].get("Revenue by Geographic Region", {})
+
+    opf.revenue_by_product_service.year_2024 = rbps.get("2024", "N/A")
+    opf.revenue_by_product_service.year_2023 = rbps.get("2023", "N/A")
+    opf.revenue_by_product_service.year_2022 = rbps.get("2022", "N/A")
+    opf.revenue_by_product_service.multiplier = merged_operating_performance.get("multiplier", "Units")
+    opf.revenue_by_product_service.currency = merged_operating_performance.get("currency", "USD")
+
+    opf.revenue_by_geographic_region.year_2024 = rbgr.get("2024", "N/A")
+    opf.revenue_by_geographic_region.year_2023 = rbgr.get("2023", "N/A")
+    opf.revenue_by_geographic_region.year_2022 = rbgr.get("2022", "N/A")
+    opf.revenue_by_geographic_region.multiplier = merged_operating_performance.get("multiplier", "Units")
+    opf.revenue_by_geographic_region.currency = merged_operating_performance.get("currency", "USD")
+    print("✅ COMPLETED: S2.5 - Operating Performance")
+    
+    checkpoint("Section 2 - Financial Performance (S2.1-S2.5)")
+    
 
     # --- S3.1: Profitability Analysis ---  
-    # profitability_analysis = llm_build_profitability_analysis(report, merged_income=merged_income, merged_balance=merged_balance, merged_cashflow=merged_cashflow,  
-    #     derived_metrics=metrics, s25_operating=merged_operating_performance, years=[2024, 2023, 2022])
-    # for k, v in profitability_analysis.items():
-    #     print(f"{k}:\n{v}\n")
+    print("🔄 PROCESSING: S3.1 - Profitability Analysis")
+    profitability_analysis = llm_build_profitability_analysis(report, merged_income=merged_income, merged_balance=merged_balance, merged_cashflow=merged_cashflow,  
+        derived_metrics=metrics, s25_operating=merged_operating_performance, years=[2024, 2023, 2022])
+    
+    pa = report.profitability_analysis
+    pa.revenue_direct_cost_dynamics = profitability_analysis.get("Revenue & Direct-Cost Dynamics", "N/A")
+    pa.operating_efficiency = profitability_analysis.get("Operating Efficiency", "N/A")
+    pa.external_oneoff_impact = profitability_analysis.get("External & One-Off Impact", "N/A")
+    print("✅ COMPLETED: S3.1 - Profitability Analysis")
+
 
     # --- S3.2: Financial Performance Summary ---  
-    # s32 = llm_build_financial_performance_summary(
-    #     report,
-    #     merged_income=merged_income,       
-    #     merged_balance=merged_balance,   
-    #     merged_cashflow=merged_cashflow, 
-    #     derived_metrics=metrics,
-    #     s25_operating=merged_operating_performance,
-    #     years=[2024, 2023, 2022],
-    #     company_name=company_name,
-    #     establishment_date=establishment_date,
-    #     company_hq=company_hq,
-    # )
-    # print("=== S3.2 ===")
-    # for k, v in s32.items():
-    #     print(k)
-    #     print("  2024:", v["2024 Report"])
-    #     print("  2023:", v["2023 Report"])
+    print("🔄 PROCESSING: S3.2 - Financial Performance Summary")
+    s32 = llm_build_financial_performance_summary(
+        report,
+        merged_income=merged_income,       
+        merged_balance=merged_balance,   
+        merged_cashflow=merged_cashflow, 
+        derived_metrics=metrics,
+        s25_operating=merged_operating_performance,
+        years=[2024, 2023, 2022],
+        company_name=company_name,
+        establishment_date=establishment_date,
+        company_hq=company_hq,
+    )
+
+    for k, v in s32.items():
+        print(k)
+        print("  2024:", v["2024 Report"])
+        print("  2023:", v["2023 Report"])
+        
+    fps = report.financial_performance_summary
+
+    def _fill_cc(cc: CoreCompetency, d: dict):
+        cc.report_2024 = d.get("2024 Report", "N/A")
+        cc.report_2023 = d.get("2023 Report", "N/A")
+
+    _fill_cc(fps.comprehensive_financial_health, s32.get("Comprehensive financial health", {}))
+    _fill_cc(fps.profitability_earnings_quality, s32.get("Profitability and earnings quality", {}))
+    _fill_cc(fps.operational_efficiency, s32.get("Operational efficiency", {}))
+    _fill_cc(fps.financial_risk_identification, s32.get("Financial risk identification and early warning", {}))
+    _fill_cc(fps.future_financial_performance_projection, s32.get("Future financial performance projection", {}))
+    print("✅ COMPLETED: S3.2 - Financial Performance Summary")
 
 
     # --- S3.3: Business Competitiveness ---  
-    
-    # bc_chunks_2024 = llm_pick_competitiveness_sections(jsonl_file_2024_path, top_k=10, model="gpt-4o-mini")
-    # _, text_2024 = assemble_financial_statement_windows_from_ids(bc_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=5, one_based_lines=True, debug=False)
-    # s33_2024 = llm_build_business_competitiveness_for_year(report, 2024, text_2024, model="gpt-4o-mini")
+    print("🔄 PROCESSING: S3.3 - Business Competitiveness")
+    bc_chunks_2024 = llm_pick_competitiveness_sections(jsonl_file_2024_path, top_k=10, model="gpt-4o-mini")
+    _, text_2024 = assemble_financial_statement_windows_from_ids(bc_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=5, one_based_lines=True, debug=False)
+    s33_2024 = llm_build_business_competitiveness_for_year(report, 2024, text_2024, model="gpt-4o-mini")
 
-    # bc_chunks_2023 = llm_pick_competitiveness_sections(jsonl_file_2023_path, top_k=10, model="gpt-4o-mini")
-    # _, text_2023 = assemble_financial_statement_windows_from_ids(bc_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=5, one_based_lines=True, debug=False)
-    # s33_2023 = llm_build_business_competitiveness_for_year(report, 2023,text_2023,model="gpt-4o-mini")
+    bc_chunks_2023 = llm_pick_competitiveness_sections(jsonl_file_2023_path, top_k=10, model="gpt-4o-mini")
+    _, text_2023 = assemble_financial_statement_windows_from_ids(bc_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=5, one_based_lines=True, debug=False)
+    s33_2023 = llm_build_business_competitiveness_for_year(report, 2023,text_2023,model="gpt-4o-mini")
 
-    # report.business_competitiveness.business_model_2024 = s33_2024.get("Business Model", "N/A")
-    # report.business_competitiveness.market_position_2024 = s33_2024.get("Market Position", "N/A")
-    # report.business_competitiveness.business_model_2023 = s33_2023.get("Business Model", "N/A")
-    # report.business_competitiveness.market_position_2023 = s33_2023.get("Market Position", "N/A")
+    report.business_competitiveness.business_model_2024 = s33_2024.get("Business Model", "N/A")
+    report.business_competitiveness.market_position_2024 = s33_2024.get("Market Position", "N/A")
+    report.business_competitiveness.business_model_2023 = s33_2023.get("Business Model", "N/A")
+    report.business_competitiveness.market_position_2023 = s33_2023.get("Market Position", "N/A")
+    print("✅ COMPLETED: S3.3 - Business Competitiveness")
+    checkpoint("Section 3 - Business Analysis (S3.1-S3.3)")
+        
         
     # --- S4.1: Risk Factors ---
-
+    print("🔄 PROCESSING: S4.1 - Risk Factors")
     rf_chunks_2024 = llm_pick_risk_sections(jsonl_file_2024_path, top_k=10)
     rf_chunks_2023 = llm_pick_risk_sections(jsonl_file_2023_path, top_k=10)
 
-    # 2) Windows -> combined text
     _, text_2024 = assemble_financial_statement_windows_from_ids(rf_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=10, one_based_lines=True, choose_first_match_only=False)
     _, text_2023 = assemble_financial_statement_windows_from_ids(rf_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=10, one_based_lines=True, choose_first_match_only=False)
 
@@ -4281,23 +5767,170 @@ def extract(md_file1: str, md_file2):
     report.risk_factors.operational_risks.report_2023 = s41_2023.get("Operational Risks", "N/A")
     report.risk_factors.financial_risks.report_2023   = s41_2023.get("Financial Risks", "N/A")
     report.risk_factors.compliance_risks.report_2023  = s41_2023.get("Compliance Risks", "N/A")
+    print("✅ COMPLETED: S4.1 - Risk Factors")
+    checkpoint("Section 4 - Risk Factors (S4.1)")
     
     
+    # --- S5.1: Board Composition ---
+    print("🔄 PROCESSING: S5.1 - Board Composition")
+    director_chunks_2024 = llm_pick_director_sections(jsonl_file_2024_path, top_k=10)
+    _, director_info_text_2024 = assemble_financial_statement_windows_from_ids(director_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    director_income_chunks_2024 = llm_pick_pay_sections(jsonl_file_2024_path, top_k=10)
+    _, director_income_text_2024 = assemble_financial_statement_windows_from_ids(director_income_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
+
+    combined_board_text_2024 = director_info_text_2024 + "\n\n===== PAY MATERIALS =====\n\n" + director_income_text_2024
+    rows_2024 = extract_board_composition(combined_board_text_2024, max_rows=10)
+
+    print(render_board_markdown(rows_2024, currency_symbol="$", multiplier="Thousands"))
+
+    report.board_composition.members = []
+    if not rows_2024:
+        report.board_composition.members.append(BoardMember()) 
+    else:
+        for r in rows_2024:
+            name = (r.get("name") or "N/A").strip()
+            pos  = (r.get("position") or "N/A").strip()
+            pay_raw = (r.get("total_income", "N/A") or "N/A").strip()
+            report.board_composition.members.append(BoardMember(name=name, position=pos, total_income=pay_raw))
+    print("✅ COMPLETED: S5.1 - Board Composition")
+        
+        
+    # --- S5.2: Internal Controls ---
+    print("🔄 PROCESSING: S5.2 - Internal Controls")
+    ids_2024 = llm_pick_controls_sections(jsonl_file_2024_path, top_k=12)
+    _, text_2024 = assemble_financial_statement_windows_from_ids(ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    ids_2023 = llm_pick_controls_sections(jsonl_file_2023_path, top_k=12)
+    _, text_2023 = assemble_financial_statement_windows_from_ids(ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
+
+    controls_2024 = extract_internal_controls_one(text_2024, year=2024)
+    controls_2023 = extract_internal_controls_one(text_2023, year=2023)
+
+    merged_controls = merge_controls_two_years(controls_2024, controls_2023)
+    # print_internal_controls_table(merged_controls)
+
+    cx = merged_controls["controls"]
+    report.internal_controls.risk_assessment_procedures.report_2024 = cx["Risk assessment procedures"]["2024"]
+    report.internal_controls.risk_assessment_procedures.report_2023 = cx["Risk assessment procedures"]["2023"]
+    report.internal_controls.control_activities.report_2024 = cx["Control activities"]["2024"]
+    report.internal_controls.control_activities.report_2023 = cx["Control activities"]["2023"]
+    report.internal_controls.monitoring_mechanisms.report_2024 = cx["Monitoring mechanisms"]["2024"]
+    report.internal_controls.monitoring_mechanisms.report_2023 = cx["Monitoring mechanisms"]["2023"]
+    report.internal_controls.identified_material_weaknesses.report_2024 = cx["Identified material weaknesses or deficiencies"]["2024"]
+    report.internal_controls.identified_material_weaknesses.report_2023 = cx["Identified material weaknesses or deficiencies"]["2023"]
+    report.internal_controls.effectiveness.report_2024 = cx["Effectiveness"]["2024"]
+    report.internal_controls.effectiveness.report_2023 = cx["Effectiveness"]["2023"]
+    print("✅ COMPLETED: S5.2 - Internal Controls")
+    checkpoint("Section 5 - Corporate Governance (S5.1-S5.2)")
+        
+        
+    # --- S6.1: Strategic Direction ---
+    print("🔄 PROCESSING: S6.1 - Strategic Direction")
+    strat_ids_2024 = llm_pick_strategy_sections(jsonl_file_2024_path, top_k=12)
+    _, strat_text_2024 = assemble_financial_statement_windows_from_ids(strat_ids_2024, jsonl_file_2024_path, md_file_path_2024,window_size=12, one_based_lines=True, choose_first_match_only=False)
+
+    strat_ids_2023 = llm_pick_strategy_sections(jsonl_file_2023_path, top_k=12)
+    _, strat_text_2023 = assemble_financial_statement_windows_from_ids(strat_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=12, one_based_lines=True, choose_first_match_only=False)
+
+    sd_2024 = extract_strategic_direction_one(strat_text_2024, 2024)
+    sd_2023 = extract_strategic_direction_one(strat_text_2023, 2023)
+
+    sd_merged = merge_strategy_two_years(sd_2024, sd_2023)
+    # print_strategic_direction_table(sd_merged)
+
+    report.strategic_direction.mergers_acquisition.report_2024       = sd_merged["strategy"]["Mergers and Acquisition"]["2024"]
+    report.strategic_direction.mergers_acquisition.report_2023       = sd_merged["strategy"]["Mergers and Acquisition"]["2023"]
+    report.strategic_direction.new_technologies.report_2024          = sd_merged["strategy"]["New technologies"]["2024"]
+    report.strategic_direction.new_technologies.report_2023          = sd_merged["strategy"]["New technologies"]["2023"]
+    report.strategic_direction.organisational_restructuring.report_2024 = sd_merged["strategy"]["Organisational Restructuring"]["2024"]
+    report.strategic_direction.organisational_restructuring.report_2023 = sd_merged["strategy"]["Organisational Restructuring"]["2023"]
+    print("✅ COMPLETED: S6.1 - Strategic Direction")
     
+
+    # --- S6.2: Challenges and Uncertainties ---     
+    print("🔄 PROCESSING: S6.2 - Challenges and Uncertainties")
+    econ_ids_2024 = llm_pick_econ_sections(jsonl_file_2024_path, top_k=6)
+    _, econ_text_2024 = assemble_financial_statement_windows_from_ids(
+        econ_ids_2024, jsonl_file_2024_path, md_file_path_2024,
+        window_size=10, one_based_lines=True, choose_first_match_only=False
+    )
+    econ_2024 = extract_econ_one(econ_text_2024, 2024)
     
+    comp_ids_2024 = llm_pick_comp_sections(jsonl_file_2024_path, top_k=6)
+    _, comp_text_2024 = assemble_financial_statement_windows_from_ids(
+        comp_ids_2024, jsonl_file_2024_path, md_file_path_2024,
+        window_size=10, one_based_lines=True, choose_first_match_only=False
+    )
+    comp_2024 = extract_comp_one(comp_text_2024, 2024)
     
+    econ_ids_2023 = llm_pick_econ_sections(jsonl_file_2023_path, top_k=6)
+    _, econ_text_2023 = assemble_financial_statement_windows_from_ids(
+        econ_ids_2023, jsonl_file_2023_path, md_file_path_2023,
+        window_size=10, one_based_lines=True, choose_first_match_only=False
+    )
+    econ_2023 = extract_econ_one(econ_text_2023, 2023)
+
+    comp_ids_2023 = llm_pick_comp_sections(jsonl_file_2023_path, top_k=6)
+    _, comp_text_2023 = assemble_financial_statement_windows_from_ids(
+        comp_ids_2023, jsonl_file_2023_path, md_file_path_2023,
+        window_size=10, one_based_lines=True, choose_first_match_only=False
+    )
+    comp_2023 = extract_comp_one(comp_text_2023, 2023)
     
+    report.challenges_uncertainties.economic_challenges.report_2024   = econ_2024
+    report.challenges_uncertainties.economic_challenges.report_2023   = econ_2023
+    report.challenges_uncertainties.competitive_pressures.report_2024 = comp_2024
+    report.challenges_uncertainties.competitive_pressures.report_2023 = comp_2023
+    print("✅ COMPLETED: S6.2 - Challenges and Uncertainties")
+
+
+    # --- S6.3: Innovation and Development Plans ---     
+    print("🔄 PROCESSING: S6.3 - Innovation and Development Plans")
+    rd_ids_2024 = llm_pick_rd_sections(jsonl_file_2024_path, top_k=15)
+    _, rd_text_2024 = assemble_financial_statement_windows_from_ids(rd_ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    rd_2024 = extract_rd_one(rd_text_2024, 2024)
+
+    launch_ids_2024 = llm_pick_launch_sections(jsonl_file_2024_path, top_k=15)
+    _, launch_text_2024 = assemble_financial_statement_windows_from_ids(launch_ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    launch_2024 = extract_launch_one(launch_text_2024, 2024)
+
+
+    rd_ids_2023 = llm_pick_rd_sections(jsonl_file_2023_path, top_k=15)
+    _, rd_text_2023 = assemble_financial_statement_windows_from_ids(rd_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    rd_2023 = extract_rd_one(rd_text_2023, 2023)
+
+    launch_ids_2023 = llm_pick_launch_sections(jsonl_file_2023_path, top_k=15)
+    _, launch_text_2023 = assemble_financial_statement_windows_from_ids(launch_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    launch_2023 = extract_launch_one(launch_text_2023, 2023)
+
+    # save 
+    report.innovation_development.rd_investments.report_2024 = rd_2024
+    report.innovation_development.rd_investments.report_2023 = rd_2023
+    report.innovation_development.new_product_launches.report_2024 = launch_2024
+    report.innovation_development.new_product_launches.report_2023 = launch_2023
+    print("✅ COMPLETED: S6.3 - Innovation and Development Plans")
+    checkpoint("Section 6 - Future Outlook (S6.1-S6.3)")
+
+    print("\n🎉 EXTRACTION PIPELINE COMPLETED SUCCESSFULLY!")
+    print("All sections (S1.1-S6.3) have been processed and populated.")
     
+    # Save final complete report with unique name
+    final_path = f"artifacts/{slug}_{timestamp}_finddr_report.md"
+    save_partial_report(report, final_path, currency_code=currency_code)
+    print(f"📄 FINAL REPORT SAVED: {final_path}")
     
+    # Calculate and display total execution time
+    end_time = time.time()
+    total_duration = end_time - start_time
+    hours = int(total_duration // 3600)
+    minutes = int((total_duration % 3600) // 60)
+    seconds = int(total_duration % 60)
     
+    print(f"\n⏱️  TOTAL EXECUTION TIME: {hours:02d}:{minutes:02d}:{seconds:02d}")
+    print(f"📊 Processing completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     return report 
 
-# lastly need  function that calls generator on extracted info and saves the report  
-    # generator = DDRGenerator(report_info)
-    # output_file = "artifacts/test_ddr_report.md"
-    # generator.save_report(output_file)
-    # print(f"\n✅ Saved generated DDR report to: {output_file}")
+
 
 if __name__ == "__main__":
     import argparse
@@ -4318,16 +5951,41 @@ if __name__ == "__main__":
         required=True,
         help="Path to the 2023 markdown file (previous year's report)",
     )
+    
+    parser.add_argument(
+        "--currency",
+        required=True,
+        help="Currency code to display in the report (e.g., USD, EUR)",
+    )
+    
+    parser.add_argument(
+        "--output_language",
+        required=True,
+        help="Language code to display in the report (e.g., en, fr)",
+    )
 
     args = parser.parse_args()
+    
+    out_lang = args.output_language.lower()
+    if out_lang in ("zh-hans", "zh_cn", "zh-cn", "zh_simplified", "zh"):
+        target_lang = Lang.ZH_HANS
+    elif out_lang in ("zh-hant", "zh_tw", "zh-tw", "zh_traditional"):
+        target_lang = Lang.ZH_HANT
+    else:
+        target_lang = Lang.EN
 
     # Run main extraction pipeline
-    report_info = extract(args.md2024, args.md2023)
+    report_info = extract(args.md2024, args.md2023, currency_code=args.currency, target_lang=target_lang)
 
     # Ensure output directory exists
     Path("artifacts").mkdir(parents=True, exist_ok=True)
 
-    generator = DDRGenerator(report_info)
-    output_file = "artifacts/finddr_report.md"
+    # Create unique filename with company name and timestamp
+    company_name = report_info.basic_info.company_name or "unknown_company"
+    slug = _slugify(company_name)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    output_file = f"artifacts/{slug}_{timestamp}_finddr_report.md"
+    
+    generator = DDRGenerator(report_info, currency_code=args.currency)
     generator.save_report(output_file)
     print(f"\n✅ Saved generated DDR report to: {output_file}")

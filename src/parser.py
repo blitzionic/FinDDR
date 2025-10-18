@@ -71,7 +71,7 @@ class DocProcessor:
         return markdown_content
 
 if __name__ == "__main__":
-    # python parser.py data/nvidia_form_10-k.pdf
+    
     parser = argparse.ArgumentParser(
         description='Process PDF files and extract markdown content using Docling'
     )

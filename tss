@@ -1,59 +1,49 @@
-Let's move onto S2.4. Key Financial Metrics:
-S2.4: Key Financial Metrics
+    # example table to test compute_key_metrics_from_tables()
+    merged_income = {
+        "years": [2024, 2023, 2022],
+        "multiplier": "Millions",
+        "currency": "GBP",
+        "fields": {
+            "Revenue": {"2024": 510.4, "2023": 472.6, "2022": 442.8},
+            "Cost of Goods Sold": {"2024": "N/A", "2023": "N/A", "2022": "N/A"},
+            "Gross Profit": {"2024": "N/A", "2023": "N/A", "2022": "N/A"},
+            "Operating Expense": {"2024": 452.3, "2023": 427.2, "2022": 451.6},
+            "Operating Income": {"2024": 58.1, "2023": 45.4, "2022": 49.4},
+            "Net Profit": {"2024": 39.5, "2023": 5.4, "2022": 47.4},
+            "Income before income taxes": {"2024": 53.3, "2023": 44.1, "2022": 47.9},
+            "Income tax expense(benefit)": {"2024": 10.6, "2023": 6.4, "2022": 3.5},
+            "Interest Expense": {"2024": 4.8, "2023": 1.3, "2022": 1.5},
+        },
+    }
 
+    merged_balance = {
+        "years": [2024, 2023, 2022],
+        "multiplier": "Millions",
+        "currency": "GBP",
+        "fields": {
+            "Total Assets": {"2024": 692.1, "2023": 596.4, "2022": 620.1},
+            "Current Assets": {"2024": 264.0, "2023": 183.7, "2022": 181.2},
+            "Non-Current Assets": {"2024": 422.3, "2023": 412.7, "2022": 438.9},
+            "Total Liabilities": {"2024": "(335.8)", "2023": "(217.9)", "2022": "(202.0)"},
+            "Current Liabilities": {"2024": "(221.9)", "2023": "(142.1)", "2022": "(113.7)"},
+            "Non-Current Liabilities": {"2024": "(113.9)", "2023": "(75.8)", "2022": "(88.3)"},
+            "Shareholders' Equity": {"2024": 356.3, "2023": 378.5, "2022": 418.1},
+            "Retained Earnings": {"2024": 52.3, "2023": 62.9, "2022": 87.2},
+            "Total Equity and Liabilities": {"2024": 692.1, "2023": 596.4, "2022": 620.1},
+            "Inventories": {"2024": 127.1, "2023": 101.7, "2022": 99.6},
+            "Prepaid Expenses": {"2024": "N/A", "2023": "N/A", "2022": "N/A"},
+        },
+    }
 
-2024
-2023
-2022
-Gross Margin
-N/A
-N/A
-N/A
-Operating Margin
-11.38%
-9.61%
-12.32%
-Net Profit Margin
-7.74%
-1.14%
-10.70
-Current Ratio
-119%
-129%
-159%
-Quick Ratio
-61.7%
-57.7%
-71.7%
-Debt-to-Equity
-94.25%
-57.58%
-48.31%
-Interest Coverage
-1210%
-3492%
-3293%
-Asset Turnover
-79.1%
-77.70%
-76.90%
-Return on Equity
-10.75%
-1.36%
-11.34%
-Return on Assets
-6.13%
-0.89%
-7.64%
-Effective Tax Rate
-19.89%
-14.51%
-7.31%
-Dividend Payout Ratio
-49.62%
-320.37%
-30.38%
-
-
-
-Give the code.
+    merged_cashflow = {
+        "years": [2024, 2023, 2022],
+        "multiplier": "Millions",
+        "currency": "GBP",
+        "fields": {
+            "Net Cash Flow from Operations": {"2024": 81.0, "2023": 65.9, "2022": 80.5},
+            "Net Cash Flow from Investing": {"2024": "(47.6)", "2023": "(39.4)", "2022": "(30.5)"},
+            "Net Cash Flow from Financing": {"2024": "(37.3)", "2023": "(40.2)", "2022": "(35.8)"},
+            "Net Increase/Decrease in Cash": {"2024": "(3.9)", "2023": "(13.7)", "2022": 14.2},
+            "Dividends": {"2024": "(19.6)", "2023": "(17.3)", "2022": "(14.4)"},
+        },
+    }

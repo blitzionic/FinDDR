@@ -7,6 +7,7 @@ and future outlook.
 
 import json
 import os
+from textwrap import dedent
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -233,56 +234,111 @@ class CompanyReport:
     challenges_uncertainties: ChallengesUncertainties = field(default_factory=ChallengesUncertainties)
     innovation_development: InnovationDevelopment = field(default_factory=InnovationDevelopment)
 
+from textwrap import dedent
 
 class DDRGenerator:
     """Generate markdown reports from CompanyReport data"""
 
-    def __init__(self, report: CompanyReport):
+    def __init__(self, report: CompanyReport, currency_code: str = "USD"):
         self.report = report
+        self.currency_code = (currency_code or "USD").upper()
+        self.currency_symbol = self._currency_symbol_from_code(self.currency_code)
 
+    @staticmethod
+    def _currency_symbol_from_code(code: str) -> str:
+        # Minimal, sensible defaults; extend as needed
+        mapping = {
+            "USD": "$",
+            "GBP": "£",
+            "EUR": "€",
+            "JPY": "¥",
+            "CNY": "¥",  
+            "RMB": "¥",
+            "AUD": "A$",
+            "CAD": "$",
+            "CHF": "CHF",
+            "INR": "₹",
+            "KRW": "₩",
+            "HKD": "HK$",
+            "SGD": "S$",
+        }
+        return mapping.get(code.upper(), "$")
+    
     def format_financial_value(self, value: Any) -> str:
-        """Format financial values consistently"""
-        if value == "N/A" or value is None:
+        """Format numeric cells like 12345 -> '12,345', keep 'N/A' as is,
+        and preserve parentheses for negatives '(123)'.
+        Works with numbers or numeric-looking strings with commas."""
+        if value is None or str(value).strip().upper() == "N/A":
             return "N/A"
 
-        # Handle negative values in parentheses
-        if isinstance(value, str) and value.startswith("(") and value.endswith(")"):
-            return f"({value[1:-1]})"
-
-        # Handle numeric values
+        # Already a pure number
         if isinstance(value, (int, float)):
-            if value < 0:
-                return f"({abs(value):,})"
-            return f"{value:,}"
+            return f"{value:,}" if value >= 0 else f"({abs(value):,})"
 
-        return str(value)
+        s = str(value).strip()
 
-        # ------------------ Section 1 ------------------
+        # If wrapped in parentheses, try to parse the inner numeric part
+        is_paren_neg = s.startswith("(") and s.endswith(")")
+        core = s[1:-1].strip() if is_paren_neg else s
+
+        # Strip common currency symbols if they sneak in
+        if core and core[0] in ("£", "$", "€", "¥"):
+            core = core[1:].strip()
+
+        # Remove commas/spaces
+        core_clean = core.replace(",", "").replace(" ", "")
+
+        # If it's something like '1.23k', treat as thousands
+        has_k = core_clean.lower().endswith("k")
+        if has_k:
+            core_clean = core_clean[:-1]
+
+        try:
+            num = float(core_clean)
+            if has_k:
+                num *= 1_000
+            # Render with thousands separators and preserve negative parentheses
+            if is_paren_neg or num < 0:
+                return f"({abs(int(round(num))):,})"
+            return f"{int(round(num)):,}"
+        except Exception:
+            # Not a clean number -> return as-is
+            return s
+
+    # ------------------ Section 1 ------------------
     def generate_section_1(self) -> str:
         """Generate Section 1: Company Overview"""
-        return f"""# Section 1: Company Overview
-          ## S1.1: Basic Information
-          | Field | Value |
-          | :---- | :---- |
-          | Company Name | {self.report.basic_info.company_name} |
-          | Establishment Date | {self.report.basic_info.establishment_date} |
-          | Headquarters Location | {self.report.basic_info.headquarters_location} |
+        md = f"""
+# Section 1: Company Overview
 
-          ## S1.2 : Core Competencies
-          | Perspective | 2024 Report | 2023 Report |
-          | :---- | :---- | :---- |
-          | Innovation Advantages | {self.report.core_competencies.innovation_advantages.report_2024} | {self.report.core_competencies.innovation_advantages.report_2023} |
-          | Product Advantages | {self.report.core_competencies.product_advantages.report_2024} | {self.report.core_competencies.product_advantages.report_2023} |
-          | Brand Recognition | {self.report.core_competencies.brand_recognition.report_2024} | {self.report.core_competencies.brand_recognition.report_2023} |
-          | Reputation Ratings | {self.report.core_competencies.reputation_ratings.report_2024} | {self.report.core_competencies.reputation_ratings.report_2023} |
+## S1.1: Basic Information
 
-          ## S1.3 : Mission & Vision
-          | Field | Value |
-          | :---- | :---- |
-          | Mission Statement | {self.report.mission_vision.mission_statement} |
-          | Vision Statement | {self.report.mission_vision.vision_statement} |
-          | Core Values | {self.report.mission_vision.core_values} |
-          """
+| Field | Value |
+| :---- | :---- |
+| Company Name | {self.report.basic_info.company_name} |
+| Establishment Date | {self.report.basic_info.establishment_date} |
+| Headquarters Location | {self.report.basic_info.headquarters_location} |
+
+
+## S1.2 : Core Competencies
+
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Innovation Advantages | {self.report.core_competencies.innovation_advantages.report_2024} | {self.report.core_competencies.innovation_advantages.report_2023} |
+| Product Advantages | {self.report.core_competencies.product_advantages.report_2024} | {self.report.core_competencies.product_advantages.report_2023} |
+| Brand Recognition | {self.report.core_competencies.brand_recognition.report_2024} | {self.report.core_competencies.brand_recognition.report_2023} |
+| Reputation Ratings | {self.report.core_competencies.reputation_ratings.report_2024} | {self.report.core_competencies.reputation_ratings.report_2023} |
+
+
+## S1.3 : Mission & Vision
+
+| Field | Value |
+| :---- | :---- |
+| Mission Statement | {self.report.mission_vision.mission_statement} |
+| Vision Statement | {self.report.mission_vision.vision_statement} |
+| Core Values | {self.report.mission_vision.core_values} |
+"""
+        return dedent(md).strip() + "\n"
 
     # ------------------ Section 2 ------------------
     def generate_section_2(self) -> str:
@@ -290,39 +346,44 @@ class DDRGenerator:
         inc = self.report.income_statement
         bal = self.report.balance_sheet
         cf = self.report.cash_flow_statement
-        metrics = self.report.key_financial_metrics
         perf = self.report.operating_performance
+        metrics = self.report.key_financial_metrics
 
-        return f"""# Section 2: Financial Performance
+        md = f"""
+# Section 2: Financial Performance
 
-          ## S2.1: Income Statement
-          | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
-          | :---- | :---- | :---- | :---- | :---- | :---- |
-          | Revenue | {self.format_financial_value(inc.revenue.year_2024)} | {self.format_financial_value(inc.revenue.year_2023)} | {self.format_financial_value(inc.revenue.year_2022)} | {inc.revenue.multiplier} | {inc.revenue.currency} |
-          | Cost of Goods Sold | {self.format_financial_value(inc.cost_of_goods_sold.year_2024)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2023)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2022)} | {inc.cost_of_goods_sold.multiplier} | {inc.cost_of_goods_sold.currency} |
-          | Gross Profit | {self.format_financial_value(inc.gross_profit.year_2024)} | {self.format_financial_value(inc.gross_profit.year_2023)} | {self.format_financial_value(inc.gross_profit.year_2022)} | {inc.gross_profit.multiplier} | {inc.gross_profit.currency} |
-          | Operating Expense | {self.format_financial_value(inc.operating_expense.year_2024)} | {self.format_financial_value(inc.operating_expense.year_2023)} | {self.format_financial_value(inc.operating_expense.year_2022)} | {inc.operating_expense.multiplier} | {inc.operating_expense.currency} |
-          | Operating Income | {self.format_financial_value(inc.operating_income.year_2024)} | {self.format_financial_value(inc.operating_income.year_2023)} | {self.format_financial_value(inc.operating_income.year_2022)} | {inc.operating_income.multiplier} | {inc.operating_income.currency} |
-          | Net Profit | {self.format_financial_value(inc.net_profit.year_2024)} | {self.format_financial_value(inc.net_profit.year_2023)} | {self.format_financial_value(inc.net_profit.year_2022)} | {inc.net_profit.multiplier} | {inc.net_profit.currency} |
-          | Income before income taxes | {self.format_financial_value(inc.income_before_income_taxes.year_2024)} | {self.format_financial_value(inc.income_before_income_taxes.year_2023)} | {self.format_financial_value(inc.income_before_income_taxes.year_2022)} | {inc.income_before_income_taxes.multiplier} | {inc.income_before_income_taxes.currency} |
-          | Income tax expense(benefit) | {self.format_financial_value(inc.income_tax_expense.year_2024)} | {self.format_financial_value(inc.income_tax_expense.year_2023)} | {self.format_financial_value(inc.income_tax_expense.year_2022)} | {inc.income_tax_expense.multiplier} | {inc.income_tax_expense.currency} |
-          | Interest Expense | {self.format_financial_value(inc.interest_expense.year_2024)} | {self.format_financial_value(inc.interest_expense.year_2023)} | {self.format_financial_value(inc.interest_expense.year_2022)} | {inc.interest_expense.multiplier} | {inc.interest_expense.currency} |
+## S2.1: Income Statement
 
-          ## S2.2: Balance Sheet
-          | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
-          | :---- | :---- | :---- | :---- | :---- | :---- |
-          | Total Assets | {self.format_financial_value(bal.total_assets.year_2024)} | {self.format_financial_value(bal.total_assets.year_2023)} | {self.format_financial_value(bal.total_assets.year_2022)} | {bal.total_assets.multiplier} | {bal.total_assets.currency} |
-          | Current Assets | {self.format_financial_value(bal.current_assets.year_2024)} | {self.format_financial_value(bal.current_assets.year_2023)} | {self.format_financial_value(bal.current_assets.year_2022)} | {bal.current_assets.multiplier} | {bal.current_assets.currency} |
-          | Non-Current Assets | {self.format_financial_value(bal.non_current_assets.year_2024)} | {self.format_financial_value(bal.non_current_assets.year_2023)} | {self.format_financial_value(bal.non_current_assets.year_2022)} | {bal.non_current_assets.multiplier} | {bal.non_current_assets.currency} |
-          | Total Liabilities | {self.format_financial_value(bal.total_liabilities.year_2024)} | {self.format_financial_value(bal.total_liabilities.year_2023)} | {self.format_financial_value(bal.total_liabilities.year_2022)} | {bal.total_liabilities.multiplier} | {bal.total_liabilities.currency} |
-          | Current Liabilities | {self.format_financial_value(bal.current_liabilities.year_2024)} | {self.format_financial_value(bal.current_liabilities.year_2023)} | {self.format_financial_value(bal.current_liabilities.year_2022)} | {bal.current_liabilities.multiplier} | {bal.current_liabilities.currency} |
-          | Non-Current Liabilities | {self.format_financial_value(bal.non_current_liabilities.year_2024)} | {self.format_financial_value(bal.non_current_liabilities.year_2023)} | {self.format_financial_value(bal.non_current_liabilities.year_2022)} | {bal.non_current_liabilities.multiplier} | {bal.non_current_liabilities.currency} |
-          | Shareholders' Equity | {self.format_financial_value(bal.shareholders_equity.year_2024)} | {self.format_financial_value(bal.shareholders_equity.year_2023)} | {self.format_financial_value(bal.shareholders_equity.year_2022)} | {bal.shareholders_equity.multiplier} | {bal.shareholders_equity.currency} |
-          | Retained Earnings | {self.format_financial_value(bal.retained_earnings.year_2024)} | {self.format_financial_value(bal.retained_earnings.year_2023)} | {self.format_financial_value(bal.retained_earnings.year_2022)} | {bal.retained_earnings.multiplier} | {bal.retained_earnings.currency} |
-          | Total Equity and Liabilities | {self.format_financial_value(bal.total_equity_and_liabilities.year_2024)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2023)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2022)} | {bal.total_equity_and_liabilities.multiplier} | {bal.total_equity_and_liabilities.currency} |
-          | Inventories | {self.format_financial_value(bal.inventories.year_2024)} | {self.format_financial_value(bal.inventories.year_2023)} | {self.format_financial_value(bal.inventories.year_2022)} | {bal.inventories.multiplier} | {bal.inventories.currency} |
-          | Prepaid Expenses | {self.format_financial_value(bal.prepaid_expenses.year_2024)} | {self.format_financial_value(bal.prepaid_expenses.year_2023)} | {self.format_financial_value(bal.prepaid_expenses.year_2022)} | {bal.prepaid_expenses.multiplier} | {bal.prepaid_expenses.currency} |
-          """
+| Field | 2024 | 2023 | 2022 | Multiplier | Currency |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Revenue | {self.format_financial_value(inc.revenue.year_2024)} | {self.format_financial_value(inc.revenue.year_2023)} | {self.format_financial_value(inc.revenue.year_2022)} | {inc.revenue.multiplier} | {inc.revenue.currency} |
+| Cost of Goods Sold | {self.format_financial_value(inc.cost_of_goods_sold.year_2024)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2023)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2022)} | {inc.cost_of_goods_sold.multiplier} | {inc.cost_of_goods_sold.currency} |
+| Gross Profit | {self.format_financial_value(inc.gross_profit.year_2024)} | {self.format_financial_value(inc.gross_profit.year_2023)} | {self.format_financial_value(inc.gross_profit.year_2022)} | {inc.gross_profit.multiplier} | {inc.gross_profit.currency} |
+| Operating Expense | {self.format_financial_value(inc.operating_expense.year_2024)} | {self.format_financial_value(inc.operating_expense.year_2023)} | {self.format_financial_value(inc.operating_expense.year_2022)} | {inc.operating_expense.multiplier} | {inc.operating_expense.currency} |
+| Operating Income | {self.format_financial_value(inc.operating_income.year_2024)} | {self.format_financial_value(inc.operating_income.year_2023)} | {self.format_financial_value(inc.operating_income.year_2022)} | {inc.operating_income.multiplier} | {inc.operating_income.currency} |
+| Net Profit | {self.format_financial_value(inc.net_profit.year_2024)} | {self.format_financial_value(inc.net_profit.year_2023)} | {self.format_financial_value(inc.net_profit.year_2022)} | {inc.net_profit.multiplier} | {inc.net_profit.currency} |
+| Income before income taxes | {self.format_financial_value(inc.income_before_income_taxes.year_2024)} | {self.format_financial_value(inc.income_before_income_taxes.year_2023)} | {self.format_financial_value(inc.income_before_income_taxes.year_2022)} | {inc.income_before_income_taxes.multiplier} | {inc.income_before_income_taxes.currency} |
+| Income tax expense(benefit) | {self.format_financial_value(inc.income_tax_expense.year_2024)} | {self.format_financial_value(inc.income_tax_expense.year_2023)} | {self.format_financial_value(inc.income_tax_expense.year_2022)} | {inc.income_tax_expense.multiplier} | {inc.income_tax_expense.currency} |
+| Interest Expense | {self.format_financial_value(inc.interest_expense.year_2024)} | {self.format_financial_value(inc.interest_expense.year_2023)} | {self.format_financial_value(inc.interest_expense.year_2022)} | {inc.interest_expense.multiplier} | {inc.interest_expense.currency} |
+
+
+## S2.2: Balance Sheet
+
+| Field | 2024 | 2023 | 2022 | Multiplier | Currency |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Total Assets | {self.format_financial_value(bal.total_assets.year_2024)} | {self.format_financial_value(bal.total_assets.year_2023)} | {self.format_financial_value(bal.total_assets.year_2022)} | {bal.total_assets.multiplier} | {bal.total_assets.currency} |
+| Current Assets | {self.format_financial_value(bal.current_assets.year_2024)} | {self.format_financial_value(bal.current_assets.year_2023)} | {self.format_financial_value(bal.current_assets.year_2022)} | {bal.current_assets.multiplier} | {bal.current_assets.currency} |
+| Non-Current Assets | {self.format_financial_value(bal.non_current_assets.year_2024)} | {self.format_financial_value(bal.non_current_assets.year_2023)} | {self.format_financial_value(bal.non_current_assets.year_2022)} | {bal.non_current_assets.multiplier} | {bal.non_current_assets.currency} |
+| Total Liabilities | {self.format_financial_value(bal.total_liabilities.year_2024)} | {self.format_financial_value(bal.total_liabilities.year_2023)} | {self.format_financial_value(bal.total_liabilities.year_2022)} | {bal.total_liabilities.multiplier} | {bal.total_liabilities.currency} |
+| Current Liabilities | {self.format_financial_value(bal.current_liabilities.year_2024)} | {self.format_financial_value(bal.current_liabilities.year_2023)} | {self.format_financial_value(bal.current_liabilities.year_2022)} | {bal.current_liabilities.multiplier} | {bal.current_liabilities.currency} |
+| Non-Current Liabilities | {self.format_financial_value(bal.non_current_liabilities.year_2024)} | {self.format_financial_value(bal.non_current_liabilities.year_2023)} | {self.format_financial_value(bal.non_current_liabilities.year_2022)} | {bal.non_current_liabilities.multiplier} | {bal.non_current_liabilities.currency} |
+| Shareholders' Equity | {self.format_financial_value(bal.shareholders_equity.year_2024)} | {self.format_financial_value(bal.shareholders_equity.year_2023)} | {self.format_financial_value(bal.shareholders_equity.year_2022)} | {bal.shareholders_equity.multiplier} | {bal.shareholders_equity.currency} |
+| Retained Earnings | {self.format_financial_value(bal.retained_earnings.year_2024)} | {self.format_financial_value(bal.retained_earnings.year_2023)} | {self.format_financial_value(bal.retained_earnings.year_2022)} | {bal.retained_earnings.multiplier} | {bal.retained_earnings.currency} |
+| Total Equity and Liabilities | {self.format_financial_value(bal.total_equity_and_liabilities.year_2024)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2023)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2022)} | {bal.total_equity_and_liabilities.multiplier} | {bal.total_equity_and_liabilities.currency} |
+| Inventories | {self.format_financial_value(bal.inventories.year_2024)} | {self.format_financial_value(bal.inventories.year_2023)} | {self.format_financial_value(bal.inventories.year_2022)} | {bal.inventories.multiplier} | {bal.inventories.currency} |
+| Prepaid Expenses | {self.format_financial_value(bal.prepaid_expenses.year_2024)} | {self.format_financial_value(bal.prepaid_expenses.year_2023)} | {self.format_financial_value(bal.prepaid_expenses.year_2022)} | {bal.prepaid_expenses.multiplier} | {bal.prepaid_expenses.currency} |
+"""
+        return dedent(md).strip() + "\n"
 
     # ------------------ Section 3 ------------------
     def generate_section_3(self) -> str:
@@ -331,99 +392,148 @@ class DDRGenerator:
         fps = self.report.financial_performance_summary
         comp = self.report.business_competitiveness
 
-        return f"""# Section 3: Business Analysis
-        ## S3.1: Profitability Analysis
-        | Field | Answer |
-        | :---- | :---- |
-        | Revenue & Direct-Cost Dynamics | {prof.revenue_direct_cost_dynamics} |
-        | Operating Efficiency | {prof.operating_efficiency} |
-        | External & One-Off Impact | {prof.external_oneoff_impact} |
+        md = f"""
+# Section 3: Business Analysis
 
-        ## S3.2: Financial Performance Summary
-        | Perspective | 2024 Report | 2023 Report |
-        | :---- | :---- | :---- |
-        | Comprehensive financial health | {fps.comprehensive_financial_health.report_2024} | {fps.comprehensive_financial_health.report_2023} |
-        | Profitability and earnings quality | {fps.profitability_earnings_quality.report_2024} | {fps.profitability_earnings_quality.report_2023} |
-        | Operational efficiency | {fps.operational_efficiency.report_2024} | {fps.operational_efficiency.report_2023} |
-        | Financial risk identification and early warning | {fps.financial_risk_identification.report_2024} | {fps.financial_risk_identification.report_2023} |
-        | Future financial performance projection | {fps.future_financial_performance_projection.report_2024} | {fps.future_financial_performance_projection.report_2023} |
+## S3.1: Profitability Analysis
 
-        ## S3.3: Business Competitiveness
-        | Field | 2024 Report | 2023 Report |
-        | :---- | :---- | :---- |
-        | Business Model | {comp.business_model_2024} | {comp.business_model_2023} |
-        | Market Position | {comp.market_position_2024} | {comp.market_position_2023} |
-        """
+| Field | Answer |
+| :---- | :---- |
+| Revenue & Direct-Cost Dynamics | {prof.revenue_direct_cost_dynamics} |
+| Operating Efficiency | {prof.operating_efficiency} |
+| External & One-Off Impact | {prof.external_oneoff_impact} |
 
-            # ------------------ Section 4 ------------------
+
+## S3.2: Financial Performance Summary
+
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Comprehensive financial health | {fps.comprehensive_financial_health.report_2024} | {fps.comprehensive_financial_health.report_2023} |
+| Profitability and earnings quality | {fps.profitability_earnings_quality.report_2024} | {fps.profitability_earnings_quality.report_2023} |
+| Operational efficiency | {fps.operational_efficiency.report_2024} | {fps.operational_efficiency.report_2023} |
+| Financial risk identification and early warning | {fps.financial_risk_identification.report_2024} | {fps.financial_risk_identification.report_2023} |
+| Future financial performance projection | {fps.future_financial_performance_projection.report_2024} | {fps.future_financial_performance_projection.report_2023} |
+
+
+## S3.3: Business Competitiveness
+
+| Field | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Business Model | {comp.business_model_2024} | {comp.business_model_2023} |
+| Market Position | {comp.market_position_2024} | {comp.market_position_2023} |
+"""
+        return dedent(md).strip() + "\n"
+
+    # ------------------ Section 4 ------------------
     def generate_section_4(self) -> str:
         """Generate Section 4: Risk Factors"""
         rf = self.report.risk_factors
-        return f"""# Section 4: Risk Factors
-          ## S4.1: Risk Factors
-          | Perspective | 2024 Report | 2023 Report |
-          | :---- | :---- | :---- |
-          | Market Risks | {rf.market_risks.report_2024} | {rf.market_risks.report_2023} |
-          | Operational Risks | {rf.operational_risks.report_2024} | {rf.operational_risks.report_2023} |
-          | Financial Risks | {rf.financial_risks.report_2024} | {rf.financial_risks.report_2023} |
-          | Compliance Risks | {rf.compliance_risks.report_2024} | {rf.compliance_risks.report_2023} |
-          """
+        md = f"""
+# Section 4: Risk Factors
+
+## S4.1: Risk Factors
+
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Market Risks | {rf.market_risks.report_2024} | {rf.market_risks.report_2023} |
+| Operational Risks | {rf.operational_risks.report_2024} | {rf.operational_risks.report_2023} |
+| Financial Risks | {rf.financial_risks.report_2024} | {rf.financial_risks.report_2023} |
+| Compliance Risks | {rf.compliance_risks.report_2024} | {rf.compliance_risks.report_2023} |
+"""
+        return dedent(md).strip() + "\n"
 
     # ------------------ Section 5 ------------------
+    def _format_money(self, value, currency_symbol="$"):
+        if value in (None, "N/A"):
+            return "N/A"
+        s = str(value).strip()
+        if s == "":
+            return "N/A"
+        neg = s.startswith("(") and s.endswith(")")
+        s = s.strip("() ").strip()
+        if s and s[0] in ("£", "$", "€"):
+            s = s[1:].strip()
+        has_k = s.lower().endswith("k")
+        if has_k:
+            s = s[:-1].strip()
+        s_clean = s.replace(",", "").replace(" ", "")
+        try:
+            num = float(s_clean)
+        except Exception:
+            return value
+        num_full = int(round(num * 1_000))
+        out = f"{num_full:,}"
+        return f"({currency_symbol}{out})" if neg else f"{currency_symbol}{out}"
+
     def generate_section_5(self) -> str:
-        """Generate Section 5: Corporate Governance"""
         board = self.report.board_composition
         controls = self.report.internal_controls
-        board_table = ""
 
+        # Build board table (always include header)
+        lines = [
+            "| Name | Position | Total Income |",
+            "| :---- | :---- | -----------: |",
+        ]
         if board.members:
-            for member in board.members:
-                board_table += f"| {member.name} | {member.position} | {member.total_income} |\n"
+            for m in board.members:
+                amount = self._format_money(m.total_income, currency_symbol=self.currency_symbol)
+                lines.append(f"| {m.name} | {m.position} | {amount} |")
         else:
-            board_table = "| N/A | N/A | N/A |\n"
+            lines.append("| N/A | N/A | N/A |")
+        board_table = "\n".join(lines)
 
-        return f"""# Section 5: Corporate Governance
-        ## S5.1: Board Composition
-        | Name | Position | Total Income |
-        | :---- | :---- | :---- |
-        {board_table}
-        ## S5.2: Internal Controls
-        | Perspective | 2024 Report | 2023 Report |
-        | :---- | :---- | :---- |
-        | Risk assessment procedures | {controls.risk_assessment_procedures.report_2024} | {controls.risk_assessment_procedures.report_2023} |
-        | Control activities | {controls.control_activities.report_2024} | {controls.control_activities.report_2023} |
-        | Monitoring mechanisms | {controls.monitoring_mechanisms.report_2024} | {controls.monitoring_mechanisms.report_2023} |
-        | Identified material weaknesses or deficiencies | {controls.identified_material_weaknesses.report_2024} | {controls.identified_material_weaknesses.report_2023} |
-        | Effectiveness | {controls.effectiveness.report_2024} | {controls.effectiveness.report_2023} |
-        """
+        md = f"""
+# Section 5: Corporate Governance
 
-        # ------------------ Section 6 ------------------
+## S5.1: Board Composition
+{board_table}
+
+## S5.2: Internal Controls
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Risk assessment procedures | {controls.risk_assessment_procedures.report_2024} | {controls.risk_assessment_procedures.report_2023} |
+| Control activities | {controls.control_activities.report_2024} | {controls.control_activities.report_2023} |
+| Monitoring mechanisms | {controls.monitoring_mechanisms.report_2024} | {controls.monitoring_mechanisms.report_2023} |
+| Identified material weaknesses or deficiencies | {controls.identified_material_weaknesses.report_2024} | {controls.identified_material_weaknesses.report_2023} |
+| Effectiveness | {controls.effectiveness.report_2024} | {controls.effectiveness.report_2023} |
+"""
+        return dedent(md).strip() + "\n"
+
+    # ------------------ Section 6 ------------------
     def generate_section_6(self) -> str:
         """Generate Section 6: Future Outlook"""
         strat = self.report.strategic_direction
         challenges = self.report.challenges_uncertainties
         innovation = self.report.innovation_development
 
-        return f"""# Section 6: Future Outlook
-        ## S6.1: Strategic Direction
-        | Perspective | 2024 Report | 2023 Report |
-        | :---- | :---- | :---- |
-        | Mergers and Acquisition | {strat.mergers_acquisition.report_2024} | {strat.mergers_acquisition.report_2023} |
-        | New technologies | {strat.new_technologies.report_2024} | {strat.new_technologies.report_2023} |
-        | Organisational Restructuring | {strat.organisational_restructuring.report_2024} | {strat.organisational_restructuring.report_2023} |
+        md = f"""
+# Section 6: Future Outlook
 
-        ## S6.2: Challenges and Uncertainties
-        | Perspective | 2024 Report | 2023 Report |
-        | :---- | :---- | :---- |
-        | Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability. | {challenges.economic_challenges.report_2024} | {challenges.economic_challenges.report_2023} |
-        | Competitive pressures from both established industry players and new, disruptive market entrants that the company faces. | {challenges.competitive_pressures.report_2024} | {challenges.competitive_pressures.report_2023} |
+## S6.1: Strategic Direction
 
-        ## S6.3: Innovation and Development Plans
-        | Perspective | 2024 Report | 2023 Report |
-        | :---- | :---- | :---- |
-        | R&D investments, with a focus on advancing technology, improving products, and creating new solutions to cater to market trends | {innovation.rd_investments.report_2024} | {innovation.rd_investments.report_2023} |
-        | New product launches, emphasizing the company's commitment to continuously introducing differentiated products | {innovation.new_product_launches.report_2024} | {innovation.new_product_launches.report_2023} |
-        """
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Mergers and Acquisition | {strat.mergers_acquisition.report_2024} | {strat.mergers_acquisition.report_2023} |
+| New technologies | {strat.new_technologies.report_2024} | {strat.new_technologies.report_2023} |
+| Organisational Restructuring | {strat.organisational_restructuring.report_2024} | {strat.organisational_restructuring.report_2023} |
+
+
+## S6.2: Challenges and Uncertainties
+
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability. | {challenges.economic_challenges.report_2024} | {challenges.economic_challenges.report_2023} |
+| Competitive pressures from both established industry players and new, disruptive market entrants that the company faces. | {challenges.competitive_pressures.report_2024} | {challenges.competitive_pressures.report_2023} |
+
+
+## S6.3: Innovation and Development Plans
+
+| Perspective | 2024 Report | 2023 Report |
+| :---- | :---- | :---- |
+| R&D investments, with a focus on advancing technology, improving products, and creating new solutions to cater to market trends | {innovation.rd_investments.report_2024} | {innovation.rd_investments.report_2023} |
+| New product launches, emphasizing the company's commitment to continuously introducing differentiated products | {innovation.new_product_launches.report_2024} | {innovation.new_product_launches.report_2023} |
+"""
+        return dedent(md).strip() + "\n"
 
     # ------------------ Combine and Save ------------------
     def generate_full_report(self) -> str:
@@ -436,7 +546,7 @@ class DDRGenerator:
             self.generate_section_5(),
             self.generate_section_6(),
         ]
-        return "\n".join(sections)
+        return ("\n\n\n".join(s.strip() for s in sections)).strip() + "\n"
 
     def save_report(self, output_path: str):
         """Save the complete report to a markdown file"""

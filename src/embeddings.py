@@ -2,10 +2,14 @@ import os, json
 import re
 from pathlib import Path
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, APIError, RateLimitError
 import numpy as np
 import faiss
 from tqdm import tqdm
+import time
+import random
+import tiktoken
+from typing import List
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -85,6 +89,9 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
             merged_start, merged_end = start, end
             i += 1
 
+        section_title = sec.get("title", "")
+        if section_title:
+            section_text = f"{section_title}\n\n{section_text}"
         texts.append(section_text)
         metadata.append({
             "section_id": sec["section_id"],
@@ -97,13 +104,53 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
 
     print(f"Building embeddings for {len(texts)} sections...")
 
+    # inside build_section_embeddings(...) before the loop
+    enc = tiktoken.encoding_for_model("text-embedding-3-large")
+    MAX_TOKENS = 8000          # model limit 8192; keep margin
+    CHUNK_OVERLAP = 128       # small overlap to avoid boundary loss
+
+    def _embed_chunk(text: str) -> np.ndarray:
+        for attempt in range(5):
+            try:
+                resp = client.embeddings.create(model="text-embedding-3-large", input=text)
+                return np.array(resp.data[0].embedding, dtype=np.float32)
+            except (RateLimitError, APIError) as e:
+                wait = 2 ** attempt + random.random()
+                print(f"[warn] Retry {attempt+1}: waiting {wait:.1f}s ({e})")
+                time.sleep(wait)
+        raise RuntimeError("Failed to embed after retries.")
+
+    def _chunk_by_tokens(text: str, max_tokens: int = MAX_TOKENS, overlap: int = CHUNK_OVERLAP) -> list[str]:
+        toks = enc.encode(text)
+        if len(toks) <= max_tokens:
+            return [text]
+        chunks = []
+        start = 0
+        while start < len(toks):
+            end = min(start + max_tokens, len(toks))
+            chunk = enc.decode(toks[start:end])
+            chunks.append(chunk)
+            if end == len(toks):
+                break
+            # move with overlap
+            start = end - overlap if end - overlap > start else end
+        return chunks
+
+    oversized = sum(1 for m in metadata if m["char_count"] > 20000)
+    if oversized:
+        print(f"[info] Detected {oversized} very large sections (>20k chars). Chunking will apply.")
+
     embeddings = []
     for text in tqdm(texts):
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=text
-        )
-        embeddings.append(response.data[0].embedding)
+        chunks = _chunk_by_tokens(text)
+        if len(chunks) == 1:
+            emb = _embed_chunk(chunks[0])
+        else:
+            sub = [_embed_chunk(c) for c in chunks]
+            emb = np.mean(np.vstack(sub), axis=0).astype(np.float32)
+            print(f"[warn] Chunked long section into {len(chunks)} parts (avg pooled).")
+        embeddings.append(emb)
+
 
     def normalize(vectors):
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -131,7 +178,7 @@ def search_sections(query: str, top_k: int = 5, md_file: str = None):
 
     # Embed the query
     query_embedding = client.embeddings.create(
-        model="text-embedding-3-small",
+        model="text-embedding-3-large",
         input=query
     ).data[0].embedding
 
@@ -147,6 +194,7 @@ def search_sections(query: str, top_k: int = 5, md_file: str = None):
         results.append({
             "rank": rank + 1,
             "title": meta[idx]["title"],
+            "section_number": meta[idx]["section_num"],
             "section_id": meta[idx]["section_id"],
             "lines": meta[idx]["lines"],
             "char_count": meta[idx]["char_count"],
@@ -183,40 +231,107 @@ def append_next_sections(md_file: str, current_section_id: str, num_next: int = 
     return combined_text
 
 
+def retrieve_relevant_text(search_queries: List[str], top_k: int, md_file: str) -> str:
+    """
+    Search for sections using multiple queries and return the complete combined text.
+    Handles duplicate section names by using composite keys (section_id + line_range).
+    
+    Args:
+        search_queries: List of search query strings
+        top_k: Number of top results to return per query
+        md_file: Name of the markdown file (without .md extension)
+    
+    Returns:
+        Combined text from all relevant sections
+    """
+    all_results = []
+    for query in search_queries:
+        results = search_sections(query, top_k=top_k, md_file=md_file)
+        all_results.extend(results)
+    
+    # Sort by relevance (distance score) first
+    all_results.sort(key=lambda x: x.get('distance', float('inf')))
+    
+    # De-duplicate using composite key: section_id + line_range + section_number
+    seen_sections = set()
+    unique_results = []
+    
+    for result in all_results:
+        # Create composite key to handle duplicate section names
+        start_line, end_line = result["lines"]
+        composite_key = f"{result['section_id']}_{start_line}_{end_line}_{result.get('section_number', 0)}"
+        
+        if composite_key not in seen_sections:
+            seen_sections.add(composite_key)
+            unique_results.append(result)
+  
+    print(f"Final unique results: {len(unique_results)} sections")
+
+    # Print a human-readable summary of the extracted sections
+    if unique_results:
+        print("\nSummary of extracted sections:")
+        for i, sec in enumerate(unique_results, start=1):
+            s_ln, e_ln = sec["lines"]
+            title = sec.get("title", "Section")
+            sec_num = sec.get("section_number")
+            chars = sec.get("char_count", 0)
+            print(f"{i}. {title} (#{sec_num}) — Lines {s_ln}-{e_ln} — Chars: {chars}")
+        print("")
+    
+    # Get the actual text for selected sections
+    with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
+        markdown_text = f.read()
+    
+    lines = markdown_text.split('\n')
+    context = ""
+
+    for h in unique_results:
+        s, e = h["lines"]
+        section_text = '\n'.join(lines[s - 1:e + 1])
+        # Include section number for clarity when there are duplicate titles
+        section_identifier = f"{h.get('title', 'Section')} (#{h.get('section_number')}, Lines {s}-{e})"
+        context += f"\n--- {section_identifier} ---\n{section_text}\n\n"
+    
+    return context.strip()
 
 
 if __name__ == "__main__":
     # Build embeddings and save to data/embeddings/ folder
-    # build_section_embeddings("data/sections_report/nvidia_form_10-k_2023_parsed.jsonl", "data/parsed/nvidia_form_10-k_2023_parsed.md")
-    build_section_embeddings("data/sections_report/chemming_raw_parsed.jsonl", "data/parsed/chemming_raw_parsed.md")
+    build_section_embeddings("data/sections_report/nvidia_2023_raw_parsed.jsonl", "data/parsed/nvidia_2023_raw_parsed.md")
 
     # Test search functionality
     print("\n" + "="*50)
     print("TESTING SEARCH FUNCTIONALITY")
     print("="*50)
 
-    # meta = np.load("data/embeddings/nvidia_form_10-k_2023_parsed.npz", allow_pickle=True)
-    meta = np.load("data/embeddings/chemming_raw_parsed.npz", allow_pickle=True)
+    meta = np.load("data/embeddings/nvidia_2023_raw_parsed.npz", allow_pickle=True)
+    # meta = np.load("data/embeddings/catl_2024_raw_parsed.npz", allow_pickle=True)
     metadata = meta["metadata"]
     
-    # Example searches
-    
-    test_queries = [
-        "company headquarters location office"
+    test_queries = [            
+        "balance sheet", "statement of financial position", "consolidated balance sheet",
+        "total assets", "current assets", "non-current assets", "property plant equipment",
+        "total liabilities", "current liabilities", "non-current liabilities",
+        "total equity", "shareholders equity", "stockholders equity", 
+        "retained earnings", "share capital", "paid-in capital"
     ]
+        
+
+    with open("data/parsed/nvidia_2023_raw_parsed.md", "r", encoding="utf-8") as f:
+        markdown_text = f.read()
+    with open("data/parsed/catl_2023_raw_parsed.md", "r", encoding="utf-8") as f:
+        markdown_text = f.read()
     
-    #with open("data/parsed/nvidia_form_10-k_2023_parsed.md", "r", encoding="utf-8") as f:
-    #  markdown_text = f.read()
-    with open("data/parsed/chemming_raw_parsed.md", "r", encoding="utf-8") as f:
-      markdown_text = f.read()
-    
-    for query in test_queries:
-        print(f"\nQuery: '{query}'")
-        print("-" * 40)
-        results = search_sections(query, top_k=3, md_file="chemming_raw_parsed")
-        for result in results:
-            print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
-            print(f"   Section ID: {result['section_id']}")
-            print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
-            print(f"   Chars: {result['char_count']:,}")
-            print(f"   Original text:\n {get_text_from_lines(markdown_text, result['lines'][0], result['lines'][1])}")
+    combined_text = retrieve_relevant_text(test_queries, top_k=5, md_file="nvidia_2023_raw_parsed")
+    print(combined_text)
+
+    # for query in test_queries:
+    #     print(f"\nQuery: '{query}'")
+    #     print("-" * 40)
+    #     results = search_sections(query, top_k=5, md_file="nvidia_2024_raw_parsed")
+    #     for result in results:
+    #         print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
+    #         print(f"   Section ID: {result['section_id']}")
+    #         print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
+    #         print(f"   Chars: {result['char_count']:,}")
+    #         print(f"   Original text:\n {get_text_from_lines(markdown_text, result['lines'][0], result['lines'][1])}")

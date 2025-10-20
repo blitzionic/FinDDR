@@ -150,10 +150,14 @@ class BusinessCompetitiveness:
 @dataclass
 class RiskFactors:
     """S4.1: Risk Factors"""
-    market_risks: CoreCompetency = field(default_factory=CoreCompetency)
-    operational_risks: CoreCompetency = field(default_factory=CoreCompetency)
-    financial_risks: CoreCompetency = field(default_factory=CoreCompetency)
-    compliance_risks: CoreCompetency = field(default_factory=CoreCompetency)
+    market_risks_2024: str = "N/A"
+    market_risks_2023: str = "N/A"
+    operational_risks_2024: str = "N/A"
+    operational_risks_2023: str = "N/A"
+    financial_risks_2024: str = "N/A"
+    financial_risks_2023: str = "N/A"
+    compliance_risks_2024: str = "N/A"
+    compliance_risks_2023: str = "N/A"
 
 
 @dataclass
@@ -187,7 +191,6 @@ class StrategicDirection:
     new_technologies: CoreCompetency = field(default_factory=CoreCompetency)
     organisational_restructuring: CoreCompetency = field(default_factory=CoreCompetency)
 
-
 @dataclass
 class ChallengesUncertainties:
     """S6.2: Challenges and Uncertainties"""
@@ -205,6 +208,7 @@ class InnovationDevelopment:
 @dataclass
 class CompanyReport:
     """Complete company financial report structure"""
+    meta_output_lang: str = "en"   # "en" | "zh-Hans" | "zh-Hant"
     # Section 1: Company Overview
     basic_info: BasicInfo = field(default_factory=BasicInfo)
     core_competencies: CoreCompetencies = field(default_factory=CoreCompetencies)
@@ -265,45 +269,38 @@ class DDRGenerator:
         return mapping.get(code.upper(), "$")
     
     def format_financial_value(self, value: Any) -> str:
-        """Format numeric cells like 12345 -> '12,345', keep 'N/A' as is,
-        and preserve parentheses for negatives '(123)'.
-        Works with numbers or numeric-looking strings with commas."""
+        """Format numeric cells: keep decimals (up to 2 places), thousands separators, and parentheses for negatives."""
         if value is None or str(value).strip().upper() == "N/A":
             return "N/A"
 
-        # Already a pure number
+        # Handle numeric types directly
         if isinstance(value, (int, float)):
-            return f"{value:,}" if value >= 0 else f"({abs(value):,})"
+            return f"{value:,.2f}".rstrip("0").rstrip(".") if "." in f"{value:,.2f}" else f"{value:,}"
 
         s = str(value).strip()
-
-        # If wrapped in parentheses, try to parse the inner numeric part
         is_paren_neg = s.startswith("(") and s.endswith(")")
         core = s[1:-1].strip() if is_paren_neg else s
 
-        # Strip common currency symbols if they sneak in
-        if core and core[0] in ("£", "$", "€", "¥"):
-            core = core[1:].strip()
+        # Strip currency symbols if present
+        core = core.lstrip("£$€¥").strip()
 
-        # Remove commas/spaces
-        core_clean = core.replace(",", "").replace(" ", "")
-
-        # If it's something like '1.23k', treat as thousands
-        has_k = core_clean.lower().endswith("k")
+        # Handle '1.23k' as thousands
+        has_k = core.lower().endswith("k")
         if has_k:
-            core_clean = core_clean[:-1]
+            core = core[:-1].strip()
 
         try:
-            num = float(core_clean)
+            num = float(core.replace(",", ""))
             if has_k:
                 num *= 1_000
-            # Render with thousands separators and preserve negative parentheses
+
+            formatted = f"{num:,.2f}".rstrip("0").rstrip(".") if not float(num).is_integer() else f"{num:,.1f}"
             if is_paren_neg or num < 0:
-                return f"({abs(int(round(num))):,})"
-            return f"{int(round(num)):,}"
+                formatted = f"({formatted.strip('-')})"
+            return formatted
         except Exception:
-            # Not a clean number -> return as-is
             return s
+
 
     # ------------------ Section 1 ------------------
     def generate_section_1(self) -> str:
@@ -348,6 +345,14 @@ class DDRGenerator:
         cf = self.report.cash_flow_statement
         perf = self.report.operating_performance
         metrics = self.report.key_financial_metrics
+        
+        income_currency = getattr(self.report.income_statement, "primary_currency", self.currency_code)
+        income_multiplier = getattr(self.report.income_statement, "primary_multiplier", "Units")
+        balance_currency = getattr(self.report.balance_sheet, "primary_currency", self.currency_code)
+        balance_multiplier = getattr(self.report.balance_sheet, "primary_multiplier", "Units")
+        cash_currency = getattr(self.report.cash_flow_statement, "primary_currency", self.currency_code)
+        cash_multiplier = getattr(self.report.cash_flow_statement, "primary_multiplier", "Units")
+        kfm = self.report.key_financial_metrics
 
         md = f"""
 # Section 2: Financial Performance
@@ -356,32 +361,68 @@ class DDRGenerator:
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Revenue | {self.format_financial_value(inc.revenue.year_2024)} | {self.format_financial_value(inc.revenue.year_2023)} | {self.format_financial_value(inc.revenue.year_2022)} | {inc.revenue.multiplier} | {inc.revenue.currency} |
-| Cost of Goods Sold | {self.format_financial_value(inc.cost_of_goods_sold.year_2024)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2023)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2022)} | {inc.cost_of_goods_sold.multiplier} | {inc.cost_of_goods_sold.currency} |
-| Gross Profit | {self.format_financial_value(inc.gross_profit.year_2024)} | {self.format_financial_value(inc.gross_profit.year_2023)} | {self.format_financial_value(inc.gross_profit.year_2022)} | {inc.gross_profit.multiplier} | {inc.gross_profit.currency} |
-| Operating Expense | {self.format_financial_value(inc.operating_expense.year_2024)} | {self.format_financial_value(inc.operating_expense.year_2023)} | {self.format_financial_value(inc.operating_expense.year_2022)} | {inc.operating_expense.multiplier} | {inc.operating_expense.currency} |
-| Operating Income | {self.format_financial_value(inc.operating_income.year_2024)} | {self.format_financial_value(inc.operating_income.year_2023)} | {self.format_financial_value(inc.operating_income.year_2022)} | {inc.operating_income.multiplier} | {inc.operating_income.currency} |
-| Net Profit | {self.format_financial_value(inc.net_profit.year_2024)} | {self.format_financial_value(inc.net_profit.year_2023)} | {self.format_financial_value(inc.net_profit.year_2022)} | {inc.net_profit.multiplier} | {inc.net_profit.currency} |
-| Income before income taxes | {self.format_financial_value(inc.income_before_income_taxes.year_2024)} | {self.format_financial_value(inc.income_before_income_taxes.year_2023)} | {self.format_financial_value(inc.income_before_income_taxes.year_2022)} | {inc.income_before_income_taxes.multiplier} | {inc.income_before_income_taxes.currency} |
-| Income tax expense(benefit) | {self.format_financial_value(inc.income_tax_expense.year_2024)} | {self.format_financial_value(inc.income_tax_expense.year_2023)} | {self.format_financial_value(inc.income_tax_expense.year_2022)} | {inc.income_tax_expense.multiplier} | {inc.income_tax_expense.currency} |
-| Interest Expense | {self.format_financial_value(inc.interest_expense.year_2024)} | {self.format_financial_value(inc.interest_expense.year_2023)} | {self.format_financial_value(inc.interest_expense.year_2022)} | {inc.interest_expense.multiplier} | {inc.interest_expense.currency} |
+| Revenue | {self.format_financial_value(inc.revenue.year_2024)} | {self.format_financial_value(inc.revenue.year_2023)} | {self.format_financial_value(inc.revenue.year_2022)} | {income_multiplier} | {income_currency} |
+| Cost of Goods Sold | {self.format_financial_value(inc.cost_of_goods_sold.year_2024)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2023)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2022)} | {income_multiplier} | {income_currency} |
+| Gross Profit | {self.format_financial_value(inc.gross_profit.year_2024)} | {self.format_financial_value(inc.gross_profit.year_2023)} | {self.format_financial_value(inc.gross_profit.year_2022)} | {income_multiplier} | {income_currency} |
+| Operating Expense | {self.format_financial_value(inc.operating_expense.year_2024)} | {self.format_financial_value(inc.operating_expense.year_2023)} | {self.format_financial_value(inc.operating_expense.year_2022)} | {income_multiplier} | {income_currency} |
+| Operating Income | {self.format_financial_value(inc.operating_income.year_2024)} | {self.format_financial_value(inc.operating_income.year_2023)} | {self.format_financial_value(inc.operating_income.year_2022)} | {income_multiplier} | {income_currency} |
+| Net Profit | {self.format_financial_value(inc.net_profit.year_2024)} | {self.format_financial_value(inc.net_profit.year_2023)} | {self.format_financial_value(inc.net_profit.year_2022)} | {income_multiplier} | {income_currency} |
+| Income before income taxes | {self.format_financial_value(inc.income_before_income_taxes.year_2024)} | {self.format_financial_value(inc.income_before_income_taxes.year_2023)} | {self.format_financial_value(inc.income_before_income_taxes.year_2022)} | {income_multiplier} | {income_currency} |
+| Income tax expense(benefit) | {self.format_financial_value(inc.income_tax_expense.year_2024)} | {self.format_financial_value(inc.income_tax_expense.year_2023)} | {self.format_financial_value(inc.income_tax_expense.year_2022)} | {income_multiplier} | {income_currency} |
+| Interest Expense | {self.format_financial_value(inc.interest_expense.year_2024)} | {self.format_financial_value(inc.interest_expense.year_2023)} | {self.format_financial_value(inc.interest_expense.year_2022)} | {income_multiplier} | {income_currency} |
 
 
 ## S2.2: Balance Sheet
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Total Assets | {self.format_financial_value(bal.total_assets.year_2024)} | {self.format_financial_value(bal.total_assets.year_2023)} | {self.format_financial_value(bal.total_assets.year_2022)} | {bal.total_assets.multiplier} | {bal.total_assets.currency} |
-| Current Assets | {self.format_financial_value(bal.current_assets.year_2024)} | {self.format_financial_value(bal.current_assets.year_2023)} | {self.format_financial_value(bal.current_assets.year_2022)} | {bal.current_assets.multiplier} | {bal.current_assets.currency} |
-| Non-Current Assets | {self.format_financial_value(bal.non_current_assets.year_2024)} | {self.format_financial_value(bal.non_current_assets.year_2023)} | {self.format_financial_value(bal.non_current_assets.year_2022)} | {bal.non_current_assets.multiplier} | {bal.non_current_assets.currency} |
-| Total Liabilities | {self.format_financial_value(bal.total_liabilities.year_2024)} | {self.format_financial_value(bal.total_liabilities.year_2023)} | {self.format_financial_value(bal.total_liabilities.year_2022)} | {bal.total_liabilities.multiplier} | {bal.total_liabilities.currency} |
-| Current Liabilities | {self.format_financial_value(bal.current_liabilities.year_2024)} | {self.format_financial_value(bal.current_liabilities.year_2023)} | {self.format_financial_value(bal.current_liabilities.year_2022)} | {bal.current_liabilities.multiplier} | {bal.current_liabilities.currency} |
-| Non-Current Liabilities | {self.format_financial_value(bal.non_current_liabilities.year_2024)} | {self.format_financial_value(bal.non_current_liabilities.year_2023)} | {self.format_financial_value(bal.non_current_liabilities.year_2022)} | {bal.non_current_liabilities.multiplier} | {bal.non_current_liabilities.currency} |
-| Shareholders' Equity | {self.format_financial_value(bal.shareholders_equity.year_2024)} | {self.format_financial_value(bal.shareholders_equity.year_2023)} | {self.format_financial_value(bal.shareholders_equity.year_2022)} | {bal.shareholders_equity.multiplier} | {bal.shareholders_equity.currency} |
-| Retained Earnings | {self.format_financial_value(bal.retained_earnings.year_2024)} | {self.format_financial_value(bal.retained_earnings.year_2023)} | {self.format_financial_value(bal.retained_earnings.year_2022)} | {bal.retained_earnings.multiplier} | {bal.retained_earnings.currency} |
-| Total Equity and Liabilities | {self.format_financial_value(bal.total_equity_and_liabilities.year_2024)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2023)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2022)} | {bal.total_equity_and_liabilities.multiplier} | {bal.total_equity_and_liabilities.currency} |
-| Inventories | {self.format_financial_value(bal.inventories.year_2024)} | {self.format_financial_value(bal.inventories.year_2023)} | {self.format_financial_value(bal.inventories.year_2022)} | {bal.inventories.multiplier} | {bal.inventories.currency} |
-| Prepaid Expenses | {self.format_financial_value(bal.prepaid_expenses.year_2024)} | {self.format_financial_value(bal.prepaid_expenses.year_2023)} | {self.format_financial_value(bal.prepaid_expenses.year_2022)} | {bal.prepaid_expenses.multiplier} | {bal.prepaid_expenses.currency} |
+| Total Assets | {self.format_financial_value(bal.total_assets.year_2024)} | {self.format_financial_value(bal.total_assets.year_2023)} | {self.format_financial_value(bal.total_assets.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Current Assets | {self.format_financial_value(bal.current_assets.year_2024)} | {self.format_financial_value(bal.current_assets.year_2023)} | {self.format_financial_value(bal.current_assets.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Non-Current Assets | {self.format_financial_value(bal.non_current_assets.year_2024)} | {self.format_financial_value(bal.non_current_assets.year_2023)} | {self.format_financial_value(bal.non_current_assets.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Total Liabilities | {self.format_financial_value(bal.total_liabilities.year_2024)} | {self.format_financial_value(bal.total_liabilities.year_2023)} | {self.format_financial_value(bal.total_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Current Liabilities | {self.format_financial_value(bal.current_liabilities.year_2024)} | {self.format_financial_value(bal.current_liabilities.year_2023)} | {self.format_financial_value(bal.current_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Non-Current Liabilities | {self.format_financial_value(bal.non_current_liabilities.year_2024)} | {self.format_financial_value(bal.non_current_liabilities.year_2023)} | {self.format_financial_value(bal.non_current_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Shareholders' Equity | {self.format_financial_value(bal.shareholders_equity.year_2024)} | {self.format_financial_value(bal.shareholders_equity.year_2023)} | {self.format_financial_value(bal.shareholders_equity.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Retained Earnings | {self.format_financial_value(bal.retained_earnings.year_2024)} | {self.format_financial_value(bal.retained_earnings.year_2023)} | {self.format_financial_value(bal.retained_earnings.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Total Equity and Liabilities | {self.format_financial_value(bal.total_equity_and_liabilities.year_2024)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2023)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Inventories | {self.format_financial_value(bal.inventories.year_2024)} | {self.format_financial_value(bal.inventories.year_2023)} | {self.format_financial_value(bal.inventories.year_2022)} | {balance_multiplier} | {balance_currency} |
+| Prepaid Expenses | {self.format_financial_value(bal.prepaid_expenses.year_2024)} | {self.format_financial_value(bal.prepaid_expenses.year_2023)} | {self.format_financial_value(bal.prepaid_expenses.year_2022)} | {balance_multiplier} | {balance_currency} |
+
+
+## S2.3: Cash Flow Statement
+
+| Field | 2024 | 2023 | 2022 | Multiplier | Currency |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Net Cash Flow from Operations | {self.format_financial_value(cf.net_cash_from_operations.year_2024)} | {self.format_financial_value(cf.net_cash_from_operations.year_2023)} | {self.format_financial_value(cf.net_cash_from_operations.year_2022)} | {cash_multiplier} | {cash_currency} |
+| Net Cash Flow from Investing | {self.format_financial_value(cf.net_cash_from_investing.year_2024)} | {self.format_financial_value(cf.net_cash_from_investing.year_2023)} | {self.format_financial_value(cf.net_cash_from_investing.year_2022)} | {cash_multiplier} | {cash_currency} |
+| Net Cash Flow from Financing | {self.format_financial_value(cf.net_cash_from_financing.year_2024)} | {self.format_financial_value(cf.net_cash_from_financing.year_2023)} | {self.format_financial_value(cf.net_cash_from_financing.year_2022)} | {cash_multiplier} | {cash_currency} |
+| Net Increase/Decrease in Cash | {self.format_financial_value(cf.net_increase_decrease_cash.year_2024)} | {self.format_financial_value(cf.net_increase_decrease_cash.year_2023)} | {self.format_financial_value(cf.net_increase_decrease_cash.year_2022)} | {cash_multiplier} | {cash_currency} |
+| Dividends | {self.format_financial_value(cf.dividends.year_2024)} | {self.format_financial_value(cf.dividends.year_2023)} | {self.format_financial_value(cf.dividends.year_2022)} | {cash_multiplier} | {cash_currency} |
+
+
+## S2.4: Key Financial Metrics
+
+| Field | 2024 | 2023 | 2022 | Multiplier | Currency |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Gross Margin | {self.format_financial_value(kfm.gross_margin.year_2024)} | {self.format_financial_value(kfm.gross_margin.year_2023)} | {self.format_financial_value(kfm.gross_margin.year_2022)} | {income_multiplier} | {income_currency} |
+| Operating Margin | {self.format_financial_value(kfm.operating_margin.year_2024)} | {self.format_financial_value(kfm.operating_margin.year_2023)} | {self.format_financial_value(kfm.operating_margin.year_2022)} | {income_multiplier} | {income_currency} |
+| Net Profit Margin | {self.format_financial_value(kfm.net_profit_margin.year_2024)} | {self.format_financial_value(kfm.net_profit_margin.year_2023)} | {self.format_financial_value(kfm.net_profit_margin.year_2022)} | {income_multiplier} | {income_currency} |
+| Current Ratio | {self.format_financial_value(kfm.current_ratio.year_2024)} | {self.format_financial_value(kfm.current_ratio.year_2023)} | {self.format_financial_value(kfm.current_ratio.year_2022)} | {income_multiplier} | {income_currency} |
+| Quick Ratio | {self.format_financial_value(kfm.quick_ratio.year_2024)} | {self.format_financial_value(kfm.quick_ratio.year_2023)} | {self.format_financial_value(kfm.quick_ratio.year_2022)} | {income_multiplier} | {income_currency} |
+| Interest Coverage | {self.format_financial_value(kfm.interest_coverage.year_2024)} | {self.format_financial_value(kfm.interest_coverage.year_2023)} | {self.format_financial_value(kfm.interest_coverage.year_2022)} | {income_multiplier} | {income_currency} |
+| Asset Turnover | {self.format_financial_value(kfm.asset_turnover.year_2024)} | {self.format_financial_value(kfm.asset_turnover.year_2023)} | {self.format_financial_value(kfm.asset_turnover.year_2022)} | {income_multiplier} | {income_currency} |
+| Debt-to-Equity | {self.format_financial_value(kfm.debt_to_equity.year_2024)} | {self.format_financial_value(kfm.debt_to_equity.year_2023)} | {self.format_financial_value(kfm.debt_to_equity.year_2022)} | {income_multiplier} | {income_currency} |
+| Return on Equity | {self.format_financial_value(kfm.return_on_equity.year_2024)} | {self.format_financial_value(kfm.return_on_equity.year_2023)} | {self.format_financial_value(kfm.return_on_equity.year_2022)} | {income_multiplier} | {income_currency} |
+| Return on Assets | {self.format_financial_value(kfm.return_on_assets.year_2024)} | {self.format_financial_value(kfm.return_on_assets.year_2023)} | {self.format_financial_value(kfm.return_on_assets.year_2022)} | {income_multiplier} | {income_currency} |
+| Effective Tax Rate | {self.format_financial_value(kfm.effective_tax_rate.year_2024)} | {self.format_financial_value(kfm.effective_tax_rate.year_2023)} | {self.format_financial_value(kfm.effective_tax_rate.year_2022)} | {income_multiplier} | {income_currency} |
+| Dividend Payout Ratio | {self.format_financial_value(kfm.dividend_payout_ratio.year_2024)} | {self.format_financial_value(kfm.dividend_payout_ratio.year_2023)} | {self.format_financial_value(kfm.dividend_payout_ratio.year_2022)} | {income_multiplier} | {income_currency} |
+
+## S2.5: Operating Performance
+
+| Field | 2024 | 2023 | 2022 |
+| :---- | :---- | :---- | :---- |
+| Revenue by Product/Service | {perf.revenue_by_product_service.year_2024} | {perf.revenue_by_product_service.year_2023} | {perf.revenue_by_product_service.year_2022} |
+| Revenue by Geographic Region | {perf.revenue_by_geographic_region.year_2024} | {perf.revenue_by_geographic_region.year_2023} | {perf.revenue_by_geographic_region.year_2022} |
 """
         return dedent(md).strip() + "\n"
 
@@ -435,10 +476,10 @@ class DDRGenerator:
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Market Risks | {rf.market_risks.report_2024} | {rf.market_risks.report_2023} |
-| Operational Risks | {rf.operational_risks.report_2024} | {rf.operational_risks.report_2023} |
-| Financial Risks | {rf.financial_risks.report_2024} | {rf.financial_risks.report_2023} |
-| Compliance Risks | {rf.compliance_risks.report_2024} | {rf.compliance_risks.report_2023} |
+| Market Risks | {rf.market_risks_2024} | {rf.market_risks_2023} |
+| Operational Risks | {rf.operational_risks_2024} | {rf.operational_risks_2023} |
+| Financial Risks | {rf.financial_risks_2024} | {rf.financial_risks_2023} |
+| Compliance Risks | {rf.compliance_risks_2024} | {rf.compliance_risks_2023} |
 """
         return dedent(md).strip() + "\n"
 
@@ -466,7 +507,7 @@ class DDRGenerator:
         return f"({currency_symbol}{out})" if neg else f"{currency_symbol}{out}"
 
     def generate_section_5(self) -> str:
-        board = self.report.board_composition
+        board_composition = self.report.board_composition
         controls = self.report.internal_controls
 
         # Build board table (always include header)
@@ -474,12 +515,30 @@ class DDRGenerator:
             "| Name | Position | Total Income |",
             "| :---- | :---- | -----------: |",
         ]
-        if board.members:
-            for m in board.members:
-                amount = self._format_money(m.total_income, currency_symbol=self.currency_symbol)
-                lines.append(f"| {m.name} | {m.position} | {amount} |")
+        
+        # Handle both list and BoardComposition object formats
+        members = []
+        if hasattr(board_composition, 'members') and board_composition.members:
+            members = board_composition.members
+        elif isinstance(board_composition, list):
+            members = board_composition
+        
+        if members:
+            for m in members:
+                if isinstance(m, dict):
+                    name = m.get('name', 'N/A')
+                    position = m.get('position', 'N/A')
+                    income = m.get('total_income', 'N/A')
+                else:  # BoardMember dataclass
+                    name = m.name
+                    position = m.position
+                    income = m.total_income
+                
+                amount = self._format_money(income, currency_symbol=self.currency_symbol)
+                lines.append(f"| {name} | {position} | {amount} |")
         else:
             lines.append("| N/A | N/A | N/A |")
+        
         board_table = "\n".join(lines)
 
         md = f"""

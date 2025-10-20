@@ -21,25 +21,15 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 from enum import Enum
 
 class Lang(str, Enum):
-    EN = "en"
-    ZH_HANS = "zh-Hans"   # Simplified Chinese (CN)
-    ZH_HANT = "zh-Hant"   # Traditional Chinese (HK)
+    EN = "EN"
+    ZH_SIM = "ZH_SIM"   # Simplified Chinese (CN)
+    ZH_TR = "ZH_TR"   # Traditional Chinese (HK)
 
-# Markets: US, UK, CN, HK, SG, AU, MY, ID
-def market_to_lang(market_code: str) -> Lang:
-    m = (market_code or "").strip().upper()
-    if m == "CN":
-        return Lang.ZH_HANS
-    if m == "HK":
-        return Lang.ZH_HANT
-    # All others (incl. SG, MY, ID outputs) => English output
-    return Lang.EN
-
-def lang_display_name(lang: Lang) -> str:
-    return {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文"}[lang]
-
+def display_lang(lang: Lang) -> str:
+    return {"EN": "English", "ZH_SIM": "简体中文", "ZH_TR": "繁體中文"}[lang]
+  
 def is_chinese(lang: Lang) -> bool:
-    return lang in (Lang.ZH_HANS, Lang.ZH_HANT)
+    return lang in (Lang.ZH_SIM, Lang.ZH_TR)
 
 
 _COMPANY_NAME: Optional[str] = None
@@ -134,10 +124,18 @@ def extract_md_tables(text: str) -> List[str]:
         tables.append(m.group(0).strip())
     return tables
 
+def extract_md_tables(text: str) -> List[str]:
+    """Extract markdown tables using regex"""
+    tables: List[str] = []
+    for m in TABLE_BLOCK_RE.finditer(text + "\n"):
+        tables.append(m.group(0).strip())
+    return tables
+
+
 def normalize_and_segment_markdown(markdown_text, doc_filename):
     """
-    Normalize & segment markdown into consistent sections
-    Returns sections array and saves JSONL file
+    Normalize & segment markdown into consistent sections,
+    merge short sections, and save as JSONL file.
     """
     lines = markdown_text.split('\n')
     sections = []
@@ -156,27 +154,23 @@ def normalize_and_segment_markdown(markdown_text, doc_filename):
             if current_section is not None:
                 current_section['end_line'] = line_idx - 1
                 current_section['content'] = '\n'.join(lines[section_start_line:line_idx])
-
-                # Extract tables from this section
                 current_section['tables'] = extract_tables_from_lines(
                     lines, section_start_line, line_idx
                 )
-
                 sections.append(current_section)
 
             # Start new section
             title = match.group(1).strip()
             section_id = slugify(title)
-
             current_section = {
                 'section_id': section_id,
                 'title': title,
-                'section_number': len(sections) + 1,  
+                'section_number': len(sections) + 1,
                 'start_line': line_idx + 1,
-                'end_line': None, 
-                'content': None,  
+                'end_line': None,
+                'content': None,
                 'tables': [],
-                'lang': 'en'  # Default language
+                'lang': 'EN'
             }
             section_start_line = line_idx
 
@@ -189,34 +183,71 @@ def normalize_and_segment_markdown(markdown_text, doc_filename):
         )
         sections.append(current_section)
 
-    # Ensure parsed directory exists
-    Path("data/sections_report").mkdir(parents=True, exist_ok=True)
+    # --- Merge one-line sections with next few ---
+    merged_sections = []
+    i = 0
+    merge_next = 3
 
-    # Save as JSONL file
+    while i < len(sections):
+        sec = sections[i]
+        start, end = sec["start_line"], sec["end_line"]
+
+        # Check if this is a one-line or nearly empty section
+        if end - start <= 0 or (len(sec.get("content", "").strip()) < 50):
+            merged_text = sec.get("content", "")
+            merged_end = end
+            merged_count = 0
+
+            for j in range(1, merge_next + 1):
+                if i + j < len(sections):
+                    next_sec = sections[i + j]
+                    merged_text += "\n\n" + next_sec.get("content", "")
+                    merged_end = next_sec["end_line"]
+                    merged_count += 1
+
+            print(f"⚙️ Merged short section '{sec['title']}' with next {merged_count} sections ({start}-{merged_end}).")
+
+            merged_sections.append({
+                **sec,
+                "end_line": merged_end,
+                "content": merged_text,
+                "char_count": len(merged_text),
+            })
+            i += merged_count + 1
+        else:
+            sec["char_count"] = len(sec.get("content", ""))
+            merged_sections.append(sec)
+            i += 1
+
+    sections = merged_sections
+
+    # --- Save merged sections as JSONL ---
+    Path("data/sections_report").mkdir(parents=True, exist_ok=True)
     jsonl_file = f"data/sections_report/{doc_filename}.jsonl"
+
     with open(jsonl_file, 'w', encoding='utf-8') as f:
         for section in sections:
-            # Create record for JSONL
             record = {
                 'section_id': section['section_id'],
                 'title': section['title'],
-                'section_number': section['section_number'],  # section numbering 
+                'section_number': section['section_number'],
                 'lines': [section['start_line'], section['end_line']],
                 'tables': [
                     {
                         'lines': [t['start_line'], t['end_line']],
                         'row_count': t['row_count']
-                    } for t in section['tables']
+                    } for t in section.get('tables', [])
                 ],
                 'lang': section['lang'],
-                'char_count': len(section['content']) if section['content'] else 0
+                'char_count': section.get('char_count', 0)
             }
             f.write(json.dumps(record, ensure_ascii=False) + '\n')
 
-    print(f"JSONL saved to: {jsonl_file}")
+    print(f"✅ JSONL saved to: {jsonl_file}")
     return sections
 
-# --------------------------- Above are MD to JSONL helpers --------------------------------------
+
+# --------------------------- Below are MD to JSONL helpers --------------------------------------
 
 def get_text_from_lines(md_file: str, start_line: int, end_line: int) -> str:
     """Extract text from specific line ranges in markdown"""
@@ -225,141 +256,409 @@ def get_text_from_lines(md_file: str, start_line: int, end_line: int) -> str:
     lines = markdown_text.split('\n')
     return '\n'.join(lines[start_line - 1 :end_line + 1])
 
+def _safe_json_from_llm(s: str) -> dict:
+    """
+    Extract the first JSON object from an LLM string.
+    """
+    import json, re
+    m = re.search(r"\{.*\}", s, flags=re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return {}
+    
+def _normalize_na(v) -> str:
+    if v is None: return "N/A"
+    s = str(v).strip()
+    return "N/A" if not s or s.upper() == "N/A" else s
+
+
+def _build_id_index(records: List[Dict[str, Any]]) -> Dict[str, List[int]]:
+    """
+    Map section_id (both raw and casefolded) -> list of indices.
+    We store two keys per id:
+      - raw id: e.g., "chief-financial-officer"
+      - casefolded key: "__CF__" + id.casefold()
+    """
+    index: Dict[str, List[int]] = {}
+    i = 0
+    while i < len(records):
+        sid = records[i].get("section_id", "")
+        if isinstance(sid, str) and sid != "":
+            # raw
+            if sid not in index:
+                index[sid] = []
+            index[sid].append(i)
+            # casefolded
+            sid_cf = sid.casefold()
+            k = "__CF__" + sid_cf
+            if k not in index:
+                index[k] = []
+            index[k].append(i)
+        i += 1
+    return index
+
+def _load_md_lines(markdown_path: str) -> List[str]:
+    with open(markdown_path, "r", encoding="utf-8") as f:
+        return f.readlines()
+
+
+def _clip(n: int, low: int, high: int) -> int:
+    if n < low:
+        return low
+    if n > high:
+        return high
+    return n
+
+def _window_indices(start_idx: int, total: int, window_size: int) -> List[int]:
+    """
+    Returns [start_idx, start_idx+1, ..., start_idx+(window_size-1)] clipped to total.
+    """
+    result: List[int] = []
+    i = 0
+    while i < window_size:
+        j = start_idx + i
+        if j >= total:
+            break
+        result.append(j)
+        i += 1
+    return result
+
+def _window_line_span(records: List[Dict[str, Any]], idxs: List[int]) -> Optional[Tuple[int, int]]:
+    """
+    From a list of record indices, compute inclusive [start_line, end_line] span
+    using each record's `lines = [start, end]`.
+    Returns None if any `lines` are missing or malformed.
+    """
+    if len(idxs) == 0:
+        return None
+
+    has_bad = False
+    min_start = None
+    max_end = None
+
+    k = 0
+    while k < len(idxs):
+        rec = records[idxs[k]]
+        lines = rec.get("lines", None)
+        if not isinstance(lines, list) or len(lines) != 2:
+            has_bad = True
+            break
+        start_line = lines[0]
+        end_line = lines[1]
+        if not isinstance(start_line, int) or not isinstance(end_line, int):
+            has_bad = True
+            break
+
+        if min_start is None or start_line < min_start:
+            min_start = start_line
+        if max_end is None or end_line > max_end:
+            max_end = end_line
+        k += 1
+
+    if has_bad:
+        return None
+    return (min_start, max_end)
+
+def _slice_markdown_lines(md_lines: List[str], start_line_inclusive: int, end_line_inclusive: int, one_based: bool = True) -> str:
+    """
+    Slices the markdown lines by the given inclusive line numbers.
+    """
+    if one_based:
+        start_idx = start_line_inclusive - 1
+        end_idx = end_line_inclusive
+    else:
+        start_idx = start_line_inclusive
+        end_idx = end_line_inclusive + 1
+
+    start_idx = _clip(start_idx, 0, len(md_lines))
+    end_idx = _clip(end_idx, 0, len(md_lines))
+    return "".join(md_lines[start_idx:end_idx])
+
+
+_TABLE_RULE_ROW_RE = re.compile(r"[\|\s:\-]*$")
+
+def _normalize_table_line(line: str) -> str:
+    # If it's a markdown table row (has >=2 pipes), trim each cell
+    if line.count("|") >= 2:
+        parts = line.split("|")
+        parts = [p.strip().replace("\xa0", " ") for p in parts]
+        # Rejoin with single spaces around pipes
+        line = " | ".join(parts)
+        # Normalize any odd spacing around pipes again
+        line = re.sub(r"\s*\|\s*", " | ", line).strip()
+        # If this line is just pipes/spaces/dashes/colons (header rule rows), keep it compact
+        if _TABLE_RULE_ROW_RE.fullmatch(line):
+            line = re.sub(r"\s+", "", line)  # "|---|:---:|" style, no spaces
+    return line
+
+def _normalize_block(s: str) -> str:
+    # 1) unify line endings & normalize NBSP/tabs
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+    s = s.replace("\xa0", " ").replace("\t", " ")
+    # 2) trim trailing spaces per line
+    lines = [ln.rstrip() for ln in s.split("\n")]
+    # 3) normalize table rows cell-by-cell
+    lines = [_normalize_table_line(ln) for ln in lines]
+    # 4) collapse long runs of spaces inside non-table lines
+    lines = [re.sub(r" {2,}", " ", ln) if ln.count("|") < 2 else ln for ln in lines]
+    # 5) collapse 3+ blank lines to max 1 blank line
+    out = "\n".join(lines)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    # 6) strip outer whitespace
+    return out.strip()
+
+def assemble_financial_statement_windows_from_ids(
+    top5_ids: List[str],
+    sections_jsonl_path: str,
+    original_markdown_path: str,
+    window_size: int = 10,
+    one_based_lines: bool = True,
+    choose_first_match_only: bool = False,  # <-- default to include ALL occurrences
+    debug: bool = False
+) -> Tuple[List[Dict[str, Any]], str]:
+    """
+    For each seed section_id in `top5_ids`:
+      - find *all* occurrences in sections JSONL by section_id only (raw + casefolded)
+      - for each occurrence, take that section plus the next (window_size - 1) sections
+      - compute start/end line span from JSONL `lines`
+      - slice the original markdown and collect text
+    """
+    # 1) Load and index
+    records = _read_jsonl_sections(sections_jsonl_path)
+    id_index = _build_id_index(records)
+    md_lines = _load_md_lines(original_markdown_path)
+    
+
+    windows_info: List[Dict[str, Any]] = []
+    combined_parts: List[str] = []
+
+    total = len(records)
+    if debug:
+        print(f"[assemble/ids] Loaded {total} records")
+        print(f"[assemble/ids] Markdown: {original_markdown_path}")
+
+    i = 0
+    while i < len(top5_ids):
+        seed_id = str(top5_ids[i])
+        
+        # Collect all matches: raw + casefolded, then dedupe + sort in doc order
+        all_matches: List[int] = []
+        if seed_id in id_index:
+            all_matches.extend(id_index[seed_id])
+
+        seed_id_cf = seed_id.casefold()
+        key_cf = "__CF__" + seed_id_cf
+        if key_cf in id_index:
+            all_matches.extend(id_index[key_cf])
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_matches: List[int] = []
+        j = 0
+        while j < len(all_matches):
+            idx = all_matches[j]
+            if idx not in seen:
+                unique_matches.append(idx)
+                seen.add(idx)
+            j += 1
+
+        if len(unique_matches) == 0:
+            if debug:
+                print(f"[warn] section_id '{seed_id}' not found. Skipping.")
+            i += 1
+            continue
+
+        if choose_first_match_only:
+            # only keep the earliest occurrence
+            unique_matches = [unique_matches[0]]
+
+        if debug:
+            print(f"[match] '{seed_id}' -> occurrences: {unique_matches}")
+
+        # For each occurrence: build a window and append text
+        occ_num = 0
+        while occ_num < len(unique_matches):
+            seed_idx = unique_matches[occ_num]
+
+            # window indices
+            idxs = _window_indices(seed_idx, total, window_size)
+            if debug:
+                print(f"[window] '{seed_id}' occ#{occ_num+1} -> seed_idx={seed_idx}, size={len(idxs)}")
+
+            # compute span
+            span = _window_line_span(records, idxs)
+            if span is None:
+                if debug:
+                    print(f"[warn] '{seed_id}' occ#{occ_num+1} has missing/malformed line spans. Skipping.")
+                occ_num += 1
+                continue
+
+            start_line = span[0]
+            end_line = span[1]
+            if debug:
+                print(f"[span] '{seed_id}' occ#{occ_num+1} -> {start_line}..{end_line}")
+
+            # collect ids/titles for reference
+            window_ids: List[str] = []
+            window_titles: List[str] = []
+            k = 0
+            while k < len(idxs):
+                rec = records[idxs[k]]
+                window_ids.append(str(rec.get("section_id", "")))
+                window_titles.append(str(rec.get("title", "")))
+                k += 1
+            
+            text_blob = _slice_markdown_lines(
+                md_lines, start_line, end_line, one_based=one_based_lines
+            )
+            text_blob = _normalize_block(text_blob)
+
+            # bundle
+            bundle = {
+                "seed_section_id": seed_id,
+                "occurrence_index": seed_idx,
+                "window_indices": idxs,
+                "window_section_ids": window_ids,
+                "window_titles": window_titles,
+                "start_line": start_line,
+                "end_line": end_line,
+                "text": text_blob
+            }
+            windows_info.append(bundle)
+
+            # append to combined
+            combined_parts.append(
+                "\n\n"
+                + "===== WINDOW FOR section_id: " + seed_id
+                + " (occurrence seed_idx " + str(seed_idx) + ") =====\n"
+                + "Start line: " + str(start_line) + " | End line: " + str(end_line) + "\n\n"
+                + text_blob
+                + "\n===== END WINDOW =====\n"
+            )
+
+            occ_num += 1
+
+        i += 1
+
+    combined_text = "".join(combined_parts)
+    if debug:
+        print(f"[result] windows={len(windows_info)} | combined_len={len(combined_text)}")
+    return windows_info, combined_text
+
+
+
 # ----------------------- S 1.1 Basic Information ----------------------------------------------------------------
 
-def query_company_name(jsonl_file, md_file) -> str:
+def llm_pick_basic_info_sections(jsonl_path: str, top_k: int = 12) -> List[str]:
+    """
+    Rank section IDs likely to contain company basics (name, establishment date, HQ).
+    Works for English titles + Simplified/Traditional Chinese.
+    """
+    KEYWORDS = [
+        # English
+        "about", "overview", "corporate information", "company information", "general information",
+        "headquarters", "registered office", "incorporat", "establish", "history", "profile",
+        "company profile", "introduction", "principal office",
+        # Chinese (简/繁)
+        "公司", "企業", "企业", "概況", "概况", "簡介", "简介", "公司資料", "公司信息", "公司資訊",
+        "基本資料", "基本资料", "註冊", "注册", "成立", "設立", "设立", "總部", "总部", "地址",
+        "辦公地點", "办公地点", "公司概况"
+    ]
 
-    with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
-      markdown_text = f.read()
-    preview_text = markdown_text[:8000]
-    
+    sections = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = json.loads(line.strip())
+            except Exception:
+                continue
+            sid   = rec.get("section_id") or ""
+            title = rec.get("title") or ""
+            if sid and title:
+                sections.append({"section_id": sid, "title": title})
+
+    def _score(text: str) -> int:
+        tl = (text or "").lower()
+        sc = 0
+        for k in KEYWORDS:
+            if k.lower() in tl or k in text:
+                sc += 1
+        return sc
+
+    ranked = sorted(
+        sections,
+        key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")),
+        reverse=True
+    )[:top_k]
+
+    # debug print
+    print("\n[S1.1] candidate sections by keyword rank:")
+    for i, s in enumerate(ranked, 1):
+        print(f" {i:>2}. {s['title']}  [{s['section_id']}]")
+
+    return [s["section_id"] for s in ranked]
+
+
+def extract_basic_information_one_shot(context_text: str, model: str = "gpt-4o-mini") -> Tuple[str, str, str, str]:
+    """
+    ONE LLM call that reads the assembled context and returns:
+      (company_name, establishment_date, hq_city, hq_country)
+    """
+    if not (context_text or "").strip():
+        return ("N/A", "N/A", "N/A", "N/A")
+
+    prompt = f"""
+        Extract BASIC COMPANY INFORMATION from the TEXT ONLY (English or Chinese).
+
+        Rules:
+        - Use only the provided TEXT; no outside knowledge.
+        - If multiple candidates appear, pick the official/primary one.
+        - establishment_date: prefer the legal incorporation/establishment date (YYYY-MM-DD if available, else YYYY).
+        - headquarters: output current HQ city and country separately.
+        - If an item is not present, set it to "N/A".
+
+        Return STRICT JSON exactly in this schema:
+
+        {{
+        "company_name": "N/A",
+        "establishment_date": "N/A",
+        "headquarters": {{
+            "city": "N/A",
+            "country": "N/A"
+        }}
+        }}
+
+        TEXT:
+        {context_text}
+        """.strip()
+
     try:
-        prompt = f"""
-        Please analyze the following text from a business document and extract the primary company name mentioned. 
-        Return only the company name, nothing else.
-        
-        Text:
-        {preview_text} 
-        """
-
-        response = client.chat.completions.create(model="gpt-3.5-turbo",  
-        messages=[
-            {"role": "system", "content": "You are an expert at extracting company names from business documents."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=50,
-        temperature=0)
-
-        company_name = response.choices[0].message.content.strip()
-        print(company_name)
-        return company_name
-
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You extract structured facts from corporate filings. Return strict JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0,
+            max_tokens=400,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        data = _safe_json_obj(raw)
     except Exception as e:
-        print(f"Error querying LLM: {e}")
-        return f"Error: {str(e)}"
-    
-def query_company_hq(jsonl_file, md_file) -> str:
-  
-    keywords = "company headquarters office location"
-    company_name_sections = search_sections(keywords, 3, md_file)
-    
-    candidate_sections_text = []
-    for result in company_name_sections:
-      start_line, end_line = result["lines"]
-      section_text = get_text_from_lines(md_file, start_line, end_line)
-      
-      print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
-      print(f"   Section ID: {result['section_id']}")
-      print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
-      print(f"   Chars: {result['char_count']:,}")
-      print(f"   Original text:\n {get_text_from_lines(md_file, result['lines'][0], result['lines'][1])}")
-      
-      if (end_line - start_line) <= 1:
-        print("⚠️ Detected one-liner section — appending next 5 sections for context.")
-        section_text = append_next_sections(md_file, result["section_id"], num_next=5)
-      candidate_sections_text.append(section_text)
-    print(f"--------------------------------")
-    combined_sections_text = "\n\n".join(candidate_sections_text)
-    print(combined_sections_text)
-    
-    try:
-        prompt = f"""
-        Please analyze the following text from a business document and extract the primary company headquarters mentioned. 
-        Return only the company headquarters: city, state/province/county, Country
-        Example: "Santa Clara, California, USA"
-        
+        print(f"[S1.1][ERROR] LLM call failed: {e}")
+        data = {}
 
-        Text:
-        {combined_sections_text}
-        """
+    name  = _normalize_na(data.get("company_name"))
+    edate = _normalize_na(data.get("establishment_date"))
+    hq    = data.get("headquarters") or {}
+    city  = _normalize_na(hq.get("city"))
+    ctry  = _normalize_na(hq.get("country"))
+    print(f"[S1.1] extracted -> name={name} | date={edate} | HQ={city}, {ctry}")
+    return (name, edate, city, ctry)
 
-        response = client.chat.completions.create(model="gpt-3.5-turbo",  
-        messages=[
-            {"role": "system", "content": "You are an expert at extracting company headquarters from business documents."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=50,
-        temperature=0)
-
-        company_hq = response.choices[0].message.content.strip()
-        return company_hq
-
-    except Exception as e:
-        print(f"Error querying LLM: {e}")
-        return f"Error: {str(e)}"
-
-
-def query_establishment_date(jsonl_file, md_file) -> str:
-  
-    keywords = "company founding date establishment incorporation founded year origin history inception formation established"
-    company_name_sections = search_sections(keywords, 3, md_file)
-    
-    candidate_sections_text = []
-    for result in company_name_sections:
-      start_line, end_line = result["lines"]
-      section_text = get_text_from_lines(md_file, start_line, end_line)
-      
-      if (end_line - start_line) <= 1:
-        print("⚠️ Detected one-liner section — appending next 5 sections for context.")
-        section_text = append_next_sections(md_file, result["section_id"], num_next=5)
-      candidate_sections_text.append(section_text)
-    
-    combined_sections_text = "\n\n".join(candidate_sections_text)
-    print(combined_sections_text)
-    
-    try:
-        prompt = f"""
-        Analyze the following text from a company's official filing or business report and
-        extract the **establishment or incorporation date**.
-
-        Follow these strict rules:
-        - Return **only one date**, the **earliest** if multiple are found.
-        - The date must be formatted as one of:
-            • "Month DD, YYYY"  (e.g., April 15, 1993)
-            • "Month, YYYY"     (e.g., April, 1993)
-            • "YYYY"            (e.g., 1993)
-        - Use natural month names (January, February, etc.).
-        - If the date is unknown or not found, return exactly: "N/A".
-        - Do not include any explanation or text other than the date.
-    
-        Text:
-        {combined_sections_text}
-        """
-
-        response = client.chat.completions.create(model="gpt-3.5-turbo",  
-        messages=[
-            {"role": "system", "content": "You are an expert in extracting founding and incorporation information from company filings."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=50,
-        temperature=0)
-
-        establishment_date = response.choices[0].message.content.strip()
-        return establishment_date
-
-    except Exception as e:
-        print(f"Error querying LLM: {e}")
-        return f"Error: {str(e)}"
 
 # --------------------------- S 1.2: Core Competencies -------------------------------------------
 PERSPECTIVE_KWS = {
@@ -772,19 +1071,6 @@ def _income_prompt(years: list[int], text: str) -> str:
         {text}
         """.strip()
 
-def _safe_json_from_llm(s: str) -> dict:
-    """
-    Extract the first JSON object from an LLM string.
-    """
-    import json, re
-    m = re.search(r"\{.*\}", s, flags=re.S)
-    if not m:
-        return {}
-    try:
-        return json.loads(m.group(0))
-    except Exception:
-        return {}
-
 def _coerce_number_or_na(v):
     """
     Coerce strings like '(257)', '1,234', '  45.6 ' to float; keep 'N/A' as-is.
@@ -1145,287 +1431,6 @@ def _read_jsonl_sections(jsonl_path: str) -> List[Dict[str, Any]]:
     records.sort(key=_order_key)
     return records
 
-
-def _normalize_title(t: str) -> str:
-    if t is None:
-        return ""
-    return t.strip().casefold()
-
-def _build_id_index(records: List[Dict[str, Any]]) -> Dict[str, List[int]]:
-    """
-    Map section_id (both raw and casefolded) -> list of indices.
-    We store two keys per id:
-      - raw id: e.g., "chief-financial-officer"
-      - casefolded key: "__CF__" + id.casefold()
-    """
-    index: Dict[str, List[int]] = {}
-    i = 0
-    while i < len(records):
-        sid = records[i].get("section_id", "")
-        if isinstance(sid, str) and sid != "":
-            # raw
-            if sid not in index:
-                index[sid] = []
-            index[sid].append(i)
-            # casefolded
-            sid_cf = sid.casefold()
-            k = "__CF__" + sid_cf
-            if k not in index:
-                index[k] = []
-            index[k].append(i)
-        i += 1
-    return index
-
-def _load_md_lines(markdown_path: str) -> List[str]:
-    with open(markdown_path, "r", encoding="utf-8") as f:
-        return f.readlines()
-
-
-def _clip(n: int, low: int, high: int) -> int:
-    if n < low:
-        return low
-    if n > high:
-        return high
-    return n
-
-def _window_indices(start_idx: int, total: int, window_size: int) -> List[int]:
-    """
-    Returns [start_idx, start_idx+1, ..., start_idx+(window_size-1)] clipped to total.
-    """
-    result: List[int] = []
-    i = 0
-    while i < window_size:
-        j = start_idx + i
-        if j >= total:
-            break
-        result.append(j)
-        i += 1
-    return result
-
-def _window_line_span(records: List[Dict[str, Any]], idxs: List[int]) -> Optional[Tuple[int, int]]:
-    """
-    From a list of record indices, compute inclusive [start_line, end_line] span
-    using each record's `lines = [start, end]`.
-    Returns None if any `lines` are missing or malformed.
-    """
-    if len(idxs) == 0:
-        return None
-
-    has_bad = False
-    min_start = None
-    max_end = None
-
-    k = 0
-    while k < len(idxs):
-        rec = records[idxs[k]]
-        lines = rec.get("lines", None)
-        if not isinstance(lines, list) or len(lines) != 2:
-            has_bad = True
-            break
-        start_line = lines[0]
-        end_line = lines[1]
-        if not isinstance(start_line, int) or not isinstance(end_line, int):
-            has_bad = True
-            break
-
-        if min_start is None or start_line < min_start:
-            min_start = start_line
-        if max_end is None or end_line > max_end:
-            max_end = end_line
-        k += 1
-
-    if has_bad:
-        return None
-    return (min_start, max_end)
-
-def _slice_markdown_lines(md_lines: List[str], start_line_inclusive: int, end_line_inclusive: int, one_based: bool = True) -> str:
-    """
-    Slices the markdown lines by the given inclusive line numbers.
-    """
-    if one_based:
-        start_idx = start_line_inclusive - 1
-        end_idx = end_line_inclusive
-    else:
-        start_idx = start_line_inclusive
-        end_idx = end_line_inclusive + 1
-
-    start_idx = _clip(start_idx, 0, len(md_lines))
-    end_idx = _clip(end_idx, 0, len(md_lines))
-    return "".join(md_lines[start_idx:end_idx])
-
-
-_TABLE_RULE_ROW_RE = re.compile(r"[\|\s:\-]*$")
-
-def _normalize_table_line(line: str) -> str:
-    # If it's a markdown table row (has >=2 pipes), trim each cell
-    if line.count("|") >= 2:
-        parts = line.split("|")
-        parts = [p.strip().replace("\xa0", " ") for p in parts]
-        # Rejoin with single spaces around pipes
-        line = " | ".join(parts)
-        # Normalize any odd spacing around pipes again
-        line = re.sub(r"\s*\|\s*", " | ", line).strip()
-        # If this line is just pipes/spaces/dashes/colons (header rule rows), keep it compact
-        if _TABLE_RULE_ROW_RE.fullmatch(line):
-            line = re.sub(r"\s+", "", line)  # "|---|:---:|" style, no spaces
-    return line
-
-def _normalize_block(s: str) -> str:
-    # 1) unify line endings & normalize NBSP/tabs
-    s = s.replace("\r\n", "\n").replace("\r", "\n")
-    s = s.replace("\xa0", " ").replace("\t", " ")
-    # 2) trim trailing spaces per line
-    lines = [ln.rstrip() for ln in s.split("\n")]
-    # 3) normalize table rows cell-by-cell
-    lines = [_normalize_table_line(ln) for ln in lines]
-    # 4) collapse long runs of spaces inside non-table lines
-    lines = [re.sub(r" {2,}", " ", ln) if ln.count("|") < 2 else ln for ln in lines]
-    # 5) collapse 3+ blank lines to max 1 blank line
-    out = "\n".join(lines)
-    out = re.sub(r"\n{3,}", "\n\n", out)
-    # 6) strip outer whitespace
-    return out.strip()
-
-def assemble_financial_statement_windows_from_ids(
-    top5_ids: List[str],
-    sections_jsonl_path: str,
-    original_markdown_path: str,
-    window_size: int = 10,
-    one_based_lines: bool = True,
-    choose_first_match_only: bool = False,  # <-- default to include ALL occurrences
-    debug: bool = False
-) -> Tuple[List[Dict[str, Any]], str]:
-    """
-    For each seed section_id in `top5_ids`:
-      - find *all* occurrences in sections JSONL by section_id only (raw + casefolded)
-      - for each occurrence, take that section plus the next (window_size - 1) sections
-      - compute start/end line span from JSONL `lines`
-      - slice the original markdown and collect text
-    """
-    # 1) Load and index
-    records = _read_jsonl_sections(sections_jsonl_path)
-    id_index = _build_id_index(records)
-    md_lines = _load_md_lines(original_markdown_path)
-    
-
-    windows_info: List[Dict[str, Any]] = []
-    combined_parts: List[str] = []
-
-    total = len(records)
-    if debug:
-        print(f"[assemble/ids] Loaded {total} records")
-        print(f"[assemble/ids] Markdown: {original_markdown_path}")
-
-    i = 0
-    while i < len(top5_ids):
-        seed_id = str(top5_ids[i])
-        
-        # Collect all matches: raw + casefolded, then dedupe + sort in doc order
-        all_matches: List[int] = []
-        if seed_id in id_index:
-            all_matches.extend(id_index[seed_id])
-
-        seed_id_cf = seed_id.casefold()
-        key_cf = "__CF__" + seed_id_cf
-        if key_cf in id_index:
-            all_matches.extend(id_index[key_cf])
-
-        # Deduplicate while preserving order
-        seen = set()
-        unique_matches: List[int] = []
-        j = 0
-        while j < len(all_matches):
-            idx = all_matches[j]
-            if idx not in seen:
-                unique_matches.append(idx)
-                seen.add(idx)
-            j += 1
-
-        if len(unique_matches) == 0:
-            if debug:
-                print(f"[warn] section_id '{seed_id}' not found. Skipping.")
-            i += 1
-            continue
-
-        if choose_first_match_only:
-            # only keep the earliest occurrence
-            unique_matches = [unique_matches[0]]
-
-        if debug:
-            print(f"[match] '{seed_id}' -> occurrences: {unique_matches}")
-
-        # For each occurrence: build a window and append text
-        occ_num = 0
-        while occ_num < len(unique_matches):
-            seed_idx = unique_matches[occ_num]
-
-            # window indices
-            idxs = _window_indices(seed_idx, total, window_size)
-            if debug:
-                print(f"[window] '{seed_id}' occ#{occ_num+1} -> seed_idx={seed_idx}, size={len(idxs)}")
-
-            # compute span
-            span = _window_line_span(records, idxs)
-            if span is None:
-                if debug:
-                    print(f"[warn] '{seed_id}' occ#{occ_num+1} has missing/malformed line spans. Skipping.")
-                occ_num += 1
-                continue
-
-            start_line = span[0]
-            end_line = span[1]
-            if debug:
-                print(f"[span] '{seed_id}' occ#{occ_num+1} -> {start_line}..{end_line}")
-
-            # collect ids/titles for reference
-            window_ids: List[str] = []
-            window_titles: List[str] = []
-            k = 0
-            while k < len(idxs):
-                rec = records[idxs[k]]
-                window_ids.append(str(rec.get("section_id", "")))
-                window_titles.append(str(rec.get("title", "")))
-                k += 1
-
-            # slice markdown
-            # text_blob = _slice_markdown_lines(md_lines, start_line, end_line, one_based=one_based_lines).strip("\n")
-            
-            text_blob = _slice_markdown_lines(
-                md_lines, start_line, end_line, one_based=one_based_lines
-            )
-            text_blob = _normalize_block(text_blob)
-
-            # bundle
-            bundle = {
-                "seed_section_id": seed_id,
-                "occurrence_index": seed_idx,
-                "window_indices": idxs,
-                "window_section_ids": window_ids,
-                "window_titles": window_titles,
-                "start_line": start_line,
-                "end_line": end_line,
-                "text": text_blob
-            }
-            windows_info.append(bundle)
-
-            # append to combined
-            combined_parts.append(
-                "\n\n"
-                + "===== WINDOW FOR section_id: " + seed_id
-                + " (occurrence seed_idx " + str(seed_idx) + ") =====\n"
-                + "Start line: " + str(start_line) + " | End line: " + str(end_line) + "\n\n"
-                + text_blob
-                + "\n===== END WINDOW =====\n"
-            )
-
-            occ_num += 1
-
-        i += 1
-
-    combined_text = "".join(combined_parts)
-    if debug:
-        print(f"[result] windows={len(windows_info)} | combined_len={len(combined_text)}")
-    return windows_info, combined_text
 
 # merge two tables (2023 + 2024)
 
@@ -5054,11 +5059,6 @@ def _safe_json_obj(s: str) -> dict:
     except Exception:
         return {}
 
-def _normalize_na(v) -> str:
-    if v is None: return "N/A"
-    s = str(v).strip()
-    return "N/A" if not s or s.upper() == "N/A" else s
-
 def _econ_prompt_one(year: int, text_block: str) -> str:
     return f"""
         You will extract *verbatim-faithful* ECONOMIC CHALLENGES for {year} from TEXT.
@@ -5130,6 +5130,16 @@ def extract_comp_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
 
 # --------------------------- S 6.3 Innovation and Development Plans -------------------------------------------
 
+def _rd_keywords(lang: str = "EN"):
+    base = ["r&d", "research", "innovation", "technology", "product development", "new product development"]
+    zh = ["研發", "研究", "創新", "技術", "產品開發", "新產品開發"]
+    return base if lang == "EN" else base + zh
+
+def _launch_keywords(lang: str = "EN"):
+    base = ["new product", "product launch", "launched", "portfolio", "rollout", "introduced"]
+    zh = ["新產品", "產品發佈", "推出", "組合", "上線", "引入", "發布"]
+    return base if lang == "EN" else base + zh
+
 import re, json
 def _safe_json_obj(s: str) -> dict:
     m = re.search(r"\{.*\}", s, flags=re.S)
@@ -5146,11 +5156,9 @@ def _batches(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i+n]
 
-# ---- LLM pickers (R&D vs Launch) ----
-def llm_pick_rd_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+def llm_pick_rd_sections(jsonl_path: str, top_k: int, batch_size: int = 150, model: str = "gpt-4o-mini", target_lang: Lang = Lang.EN) -> list[str]:
     """
-    Find sections likely to contain R&D investments / innovation programs.
-    Examples: "R&D", "Innovation", "Technology development", "Product development", "Research".
+    Find sections likely to contain R&D/innovation info. Works for English or Chinese titles.
     """
     import json as _json
     sections = []
@@ -5169,18 +5177,24 @@ def llm_pick_rd_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150,
         return []
 
     scored = []
-    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    system_msg = (
+        "You are a precise classifier for annual report sections. "
+        "Return JSON arrays only."
+    )
+    
     for chunk in _batches(sections, batch_size):
         compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
         user_prompt = f"""
-            Select entries most likely to contain **R&D investments/innovation** details:
-            - Titles like: "R&D", "Research & development", "Innovation", "Technology development", "Product development", "Strategic report" subsections about innovation.
-            Avoid: pure marketing, remuneration, audit opinion-only.
+            Select entries likely to contain information about: **R&D investments / innovation**, strategy, strategic report
+            - Titles can be English **or Chinese** (繁體/簡體) or Indonesian.
+            - Look for: "R&D", "Research & Development", "Innovation", "Technology development",
+              "Product development", "Research", or Chinese equivalents like「研發」「研究」「創新」「技術」「產品開發」.
+            Avoid: remuneration-only, audit opinions, generic marketing.
 
-            Return JSON array: [{{"section_id":"...", "score":0.0-1.0}}, ...]
+            Return JSON array only: [{{"section_id":"...", "score":0.0-1.0}}, ...]
             Sections:
             {json.dumps(compact, ensure_ascii=False)}
-            """.strip()
+        """.strip()
         try:
             client = OpenAI()
             resp = client.chat.completions.create(
@@ -5201,11 +5215,12 @@ def llm_pick_rd_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150,
             continue
 
     if not scored:
-        # fallback keywords
-        KEY = ["r&d", "research", "innovation", "technology", "product development", "new product development"]
+        # Fallback keyword ranking (now bilingual)
+        print(f"Falling back using KEYWORDS 1")
+        KEY = _rd_keywords(target_lang)
         def _score(t: str) -> float:
             tl = t.lower()
-            return float(sum(1 for k in KEY if k in tl))
+            return float(sum(1 for k in KEY if k in tl or k in t))
         ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
         return [s.get("section_id") for s in ranked[:top_k] if s.get("section_id")]
 
@@ -5213,13 +5228,19 @@ def llm_pick_rd_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150,
     for sid, sc in scored:
         if sid not in best or sc > best[sid]:
             best[sid] = sc
+            
+    # # Print rankings
+    # ranked = sorted(best.items(), key=lambda x:x[1], reverse=True)
+    # print("\n--- LLM Rankings ---")
+    # for i, (sid, sc) in enumerate(ranked[:top_k], 1):
+    #     title = next((s["title"] for s in sections if s["section_id"] == sid), "")
+    #     print(f"{i:2d}. {sid:>15}  |  score={sc:.3f}  |  {title}")
+
     return [sid for sid, _ in sorted(best.items(), key=lambda x:x[1], reverse=True)[:top_k]]
 
-
-def llm_pick_launch_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 150, model: str = "gpt-4o-mini") -> list[str]:
+def llm_pick_launch_sections(jsonl_path: str, top_k, batch_size: int = 150, model: str = "gpt-4o-mini", target_lang: Lang = Lang.EN) -> list[str]:
     """
-    Find sections likely to contain new product launches / rollouts.
-    Examples: "New products", "Product launches", "Portfolio expansion", "New offerings".
+    Find sections likely to contain new product launches. Works for English or Chinese titles.
     """
     import json as _json
     sections = []
@@ -5238,18 +5259,23 @@ def llm_pick_launch_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 
         return []
 
     scored = []
-    system_msg = "You are a precise classifier for annual report sections. Return JSON arrays only."
+    system_msg = (
+        "You are a precise classifier for annual report sections. "
+        "Return JSON arrays only."
+    )
     for chunk in _batches(sections, batch_size):
         compact = [{"section_id": s["section_id"], "title": s["title"][:180]} for s in chunk]
         user_prompt = f"""
-            Select entries most likely to contain **new product launches/portfolio updates**:
-            - Titles like: "New products", "Product launches", "Portfolio update/expansion", "Innovation highlights", "Go-to-market".
-            Avoid: generic strategy without explicit launches, remuneration, audit.
+            Select entries likely to contain **new product launches / portfolio updates**:
+            - Section titles can be English or Simplified Chinese** or Traditional Chinese (繁體/簡體).
+            - Your output should be the section_id and score as defined below. 
+            - Look for English cues: "New products", "Product launches", "Launched", "Introduced",
+              and Chinese cues: 「新產品」「產品發佈/發布」「推出」「引入」「上線」等, or in the language of the sections themselves. 
 
-            Return JSON array: [{{"section_id":"...", "score":0.0-1.0}}, ...]
+            Return JSON array only: [{{"section_id":"...", "score":0.0-1.0}}, ...]
             Sections:
             {json.dumps(compact, ensure_ascii=False)}
-            """.strip()
+        """.strip()
         try:
             client = OpenAI()
             resp = client.chat.completions.create(
@@ -5270,10 +5296,12 @@ def llm_pick_launch_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 
             continue
 
     if not scored:
-        KEY = ["new product", "product launch", "launched", "portfolio", "rollout", "introduced"]
+        print(f"Falling back using KEYWORDS 1")
+        KEY = _launch_keywords(target_lang)
         def _score(t: str) -> float:
+            # Note: we check both `.lower()` for English and raw for Chinese.
             tl = t.lower()
-            return float(sum(1 for k in KEY if k in tl))
+            return float(sum(1 for k in KEY if k in tl or k in t))
         ranked = sorted(sections, key=lambda s: _score((s.get("title") or "") + " " + (s.get("section_id") or "")), reverse=True)
         return [s.get("section_id") for s in ranked[:top_k] if s.get("section_id")]
 
@@ -5283,81 +5311,84 @@ def llm_pick_launch_sections(jsonl_path: str, top_k: int = 8, batch_size: int = 
             best[sid] = sc
     return [sid for sid, _ in sorted(best.items(), key=lambda x:x[1], reverse=True)[:top_k]]
 
-# ---- Extraction prompts (one call per category per year) ----
-def _rd_prompt_one(year: int, text_block: str) -> str:
-    co = _company_or_generic()
+def _rd_prompt_one(year: int, text_block: str, co: str, target_lang: Lang = Lang.EN) -> str:
+    
+    example = "例：聚焦雲端與AI研發，強化自研演算法與感測器融合能力；擴充資安與電子戰等關鍵技術儲備。" if target_lang != Lang.EN else ""
     return f"""
-        You will EXTRACT R&D / INNOVATION INVESTMENTS for {co} for {year} from TEXT_{year} ONLY. R&D investments, with a focus on advancing technology, improving products, and creating new solutions to cater to market trends
+        You will EXTRACT R&D / INNOVATION INVESTMENTS for {co} for {year} from TEXT_{year} ONLY.
 
-        OFFICIAL-STYLE REQUIREMENTS
+        OUTPUT LANGUAGE: {display_lang(target_lang)}. Respond only in {display_lang(target_lang)}.
+        STYLE:
         - Use ONLY TEXT_{year}. No external knowledge or inference.
-        - Write in third-person and refer to the company as "{co}" (never "we").
-        - Output 1-2 concise sentence in a neutral, disclosure tone that mirrors annual-report style.
-        - Prioritize THEMATIC CAPABILITY VECTORS over money/capex: e.g., sensors, communications, cyber, AI, EW, OSINT, ML, information security, etc.
-        - Include named business units or programs when present.
-        - Treat R&D/innovation as capability development, technical talent investment, and product/service portfolio advancement.
-        - EXCLUDE operations-only items: manufacturing capacity builds, plant/facility projects, revenue targets, contracts, or generic process methods (e.g., “rapid prototyping”) unless explicitly tied to a new capability.
-        - If the text does not support an answer, output "N/A".
-        - Do NOT copy or mix content from other years.
-        - Avoid marketing adjectives unless verbatim in TEXT_{year}.
+        - Third-person; refer to the company as "{co}" or "the company".
+        - 1–4 concise sentences in neutral annual-report tone.
+        - Focus on thematic capabilities (e.g., sensors, AI/ML, cyber, EW, OSINT) rather than capex totals.
+        - Include named programs/units when present.
+        - Exclude pure operations/capacity items unless explicitly tied to a capability.
+        - If unsupported, output "N/A".
 
-        OUTPUT (JSON ONLY, exactly this schema):
+        {example}
+
+        OUTPUT (JSON ONLY, exactly):
         {{ "years": [{year}], "value": {{"{year}": "N/A"}} }}
 
         TEXT_{year}:
         {text_block}
-        """.strip()
+    """.strip()
 
-def _launch_prompt_one(year: int, text_block: str) -> str:
-    co = _company_or_generic()
+def _launch_prompt_one(year: int, text_block: str, co: str, target_lang: Lang = Lang.EN) -> str:
+    example = "例：推出雲端資料平台與邊緣AI模組，擴展至醫療與金融等新場域。" if target_lang != Lang.EN else ""
     return f"""
-        You will EXTRACT NEW PRODUCT/SERVICE LAUNCHES or CLEAR NEW CAPABILITIES for {co} for {year} from TEXT_{year} ONLY. New product launches, emphasizing the company’s commitment to continuously introducing differentiated products.
+        You will EXTRACT NEW PRODUCT/SERVICE LAUNCHES for {co} for {year} from TEXT_{year} ONLY.
 
-        OFFICIAL-STYLE REQUIREMENTS
+        OUTPUT LANGUAGE: {display_lang(target_lang)}. Respond only in {display_lang(target_lang)}.
+        STYLE:
         - Use ONLY TEXT_{year}. No external knowledge or inference.
-        - Write in third-person and refer to the company as "{co}" (never "we").
-        - Output 1-2 concise sentence in a neutral, disclosure tone that mirrors annual-report style.
-        - Prefer explicit launch language (“launched”, “introduced”, “released”, “rollout”). If not present but the text clearly indicates a FIRST-TIME capability addition, summarize it as a capability introduction.
-        - Include named products/platforms/units when present.
-        - EXCLUDE items that are not launches/capability introductions: capacity/facility builds, contracts/awards, generic process changes (e.g., “rapid prototyping”) unless explicitly tied to a new capability.
-        - If the text does not support an answer, output "N/A".
-        - Do NOT copy or mix content from other years.
-        - Avoid marketing adjectives unless verbatim in TEXT_{year}.
+        - Third-person; refer to the company as "{co}" or "the company".
+        - 1-4 sentences in neutral annual-report tone.
+        - Prefer explicit launch cues ("launched/introduced") or their Chinese equivalents.
+        - Include named products/platforms when present.
+        - Exclude capacity/facility builds and generic process changes unless tied to a new capability.
+        - If unsupported, output "N/A".
 
-        OUTPUT (JSON ONLY, exactly this schema):
+        {example}
+
+        OUTPUT (JSON ONLY, exactly):
         {{ "years": [{year}], "value": {{"{year}": "N/A"}} }}
 
         TEXT_{year}:
         {text_block}
-        """.strip()
+    """.strip()
 
-
-def extract_rd_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
+def extract_rd_one(text: str, year: int, model: str = "gpt-4o-mini", target_lang: Lang = Lang.EN) -> str:
     if not (text or "").strip(): return "N/A"
     client = OpenAI()
-    prompt = _rd_prompt_one(year, text)
+    prompt = _rd_prompt_one(year, text, get_company_name(), target_lang)
     resp = client.chat.completions.create(
         model=model,
-        messages=[{"role":"system", "content":"Extract R&D investments faithfully. Output strict JSON only."},
-                  {"role":"user", "content":prompt}],
+        messages=[
+            {"role":"system", "content": f"Extract R&D investments faithfully. Output strict JSON only. Respond in {display_lang(target_lang)}."},
+            {"role":"user", "content": prompt}
+        ],
         temperature=0, max_tokens=700
     )
     data = _safe_json_obj((resp.choices[0].message.content or "").strip())
     return _normalize_na((data.get("value") or {}).get(str(year), "N/A"))
 
-def extract_launch_one(text: str, year: int, model: str = "gpt-4o-mini") -> str:
+def extract_launch_one(text: str, year: int, model: str = "gpt-4o-mini", target_lang: Lang = Lang.EN) -> str:
     if not (text or "").strip(): return "N/A"
     client = OpenAI()
-    prompt = _launch_prompt_one(year, text)
+    prompt = _launch_prompt_one(year, text, get_company_name(), target_lang)
     resp = client.chat.completions.create(
         model=model,
-        messages=[{"role":"system", "content":"Extract new product launches faithfully. Output strict JSON only."},
-                  {"role":"user", "content":prompt}],
+        messages=[
+            {"role":"system", "content": f"Extract new product launches faithfully. Output strict JSON only. Respond in {display_lang(target_lang)}."},
+            {"role":"user", "content": prompt}
+        ],
         temperature=0, max_tokens=700
     )
     data = _safe_json_obj((resp.choices[0].message.content or "").strip())
     return _normalize_na((data.get("value") or {}).get(str(year), "N/A"))
-
     
 # -----------------------------------------------------------------------------------------
 # ----------------- test extraction -------------------------------------------------------
@@ -5409,6 +5440,16 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     md_file_path_2024 = f"data/parsed/{md_file_2024}.md"
     md_file_path_2023 = f"data/parsed/{md_file_2023}.md"
     
+    # Extract company name from filename (e.g., "nvidia_2024_raw_parsed" -> "nvidia")
+    company_from_filename = md_file_2024.split('_')[0] if '_' in md_file_2024 else md_file_2024
+    slug = _slugify(company_from_filename)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    
+    # Create company-specific folder structure
+    company_folder = f"artifacts/{slug}"
+    partial_path = f"{company_folder}/partial/{timestamp}_report.md"
+    print(f"📁 Report will be saved to company folder: {company_folder}/")
+    
     def checkpoint(section_label: str):
         print(f"💾 Saving partial after: {section_label}")
         save_partial_report(report, partial_path, currency_code=currency_code)
@@ -5454,471 +5495,478 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("\n" + "="*60)
     print("📋 PROCESSING: S1.1 - Basic Information (2024 ONLY)")
     print("="*60)
-    company_name = query_company_name(jsonl_file_2024_path, md_file_2024)
-    establishment_date = query_establishment_date(jsonl_file_2024_path, md_file_2024)
-    company_hq = query_company_hq(jsonl_file_2024_path, md_file_2024)
-    # ADD CURRENCY AS GLOBAL VALUE
     
-    # save
+    basic_ids_2024 = llm_pick_basic_info_sections(jsonl_file_2024_path, top_k=12)
+
+    _, basic_context_2024 = assemble_financial_statement_windows_from_ids(basic_ids_2024,
+        jsonl_file_2024_path,
+        md_file_path_2024,
+        window_size=12,
+        one_based_lines=True,
+        choose_first_match_only=False
+    )
+    
+    company_name, establishment_date, hq_city, hq_country = extract_basic_information_one_shot(basic_context_2024, model="gpt-4o-mini")
+
     report.basic_info.company_name = company_name
     report.basic_info.establishment_date = establishment_date
-    report.basic_info.headquarters_location = company_hq
+    report.basic_info.headquarters_location = (f"{hq_city}, {hq_country}" if hq_city != "N/A" and hq_country != "N/A" else "N/A")
     set_company_name(company_name)
     
-    slug = _slugify(company_name)
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    partial_path = f"partial_reports/{slug}_{timestamp}_report.md"
-    print(f"📁 Report will be saved as: {partial_path}")
+    print("✅ COMPLETED: S1.1 - Basic Information")
 
-    print("\n" + "="*60)
-    print("🎯 PROCESSING: S1.2 - Core Competencies (2024 + 2023)")
-    print("="*60)
-    core_comp_2024 = extract_core_competencies(md_file_2024)
-    core_comp_2023 = extract_core_competencies(md_file_2023)
+    # ADD CURRENCY AS GLOBAL VALUE
+    
 
-    core_comp = merge_core_competencies(core_comp_2024, core_comp_2023)
+    # print("\n" + "="*60)
+    # print("🎯 PROCESSING: S1.2 - Core Competencies (2024 + 2023)")
+    # print("="*60)
+    # core_comp_2024 = extract_core_competencies(md_file_2024)
+    # core_comp_2023 = extract_core_competencies(md_file_2023)
+
+    # core_comp = merge_core_competencies(core_comp_2024, core_comp_2023)
+    # # # save
+    # report.core_competencies.innovation_advantages.report_2024 = str((core_comp.get("Innovation Advantages", {}) or {}).get("2024", "N/A") or "N/A")
+    # report.core_competencies.innovation_advantages.report_2023 = str((core_comp.get("Innovation Advantages", {}) or {}).get("2023", "N/A") or "N/A")
+    # report.core_competencies.product_advantages.report_2024 = str((core_comp.get("Product Advantages", {}) or {}).get("2024", "N/A") or "N/A")
+    # report.core_competencies.product_advantages.report_2023 = str((core_comp.get("Product Advantages", {}) or {}).get("2023", "N/A") or "N/A")
+    # report.core_competencies.brand_recognition.report_2024 = str((core_comp.get("Brand Recognition", {}) or {}).get("2024", "N/A") or "N/A")
+    # report.core_competencies.brand_recognition.report_2023 = str((core_comp.get("Brand Recognition", {}) or {}).get("2023", "N/A") or "N/A")
+    # report.core_competencies.reputation_ratings.report_2024 = str((core_comp.get("Reputation Ratings", {}) or {}).get("2024", "N/A") or "N/A")
+    # report.core_competencies.reputation_ratings.report_2023 = str((core_comp.get("Reputation Ratings", {}) or {}).get("2023", "N/A") or "N/A")
+
+    # print("✅ S1.2 Core Competencies completed")
+    # for perspective in ["Innovation Advantages", "Product Advantages", "Brand Recognition", "Reputation Ratings"]:
+    #     print(f"   {perspective}: 2024 ✓ | 2023 ✓")
+
+    # print("\n" + "="*60)
+    # print("🎯 PROCESSING: S1.3 - Mission & Vision (2024 ONLY)")
+    # print("="*60)
+    # mv = extract_mission_vision_values(jsonl_file_2024_path, md_file_2024)
+    # print(f"  Mission: {mv['mission']}")
+    # print(f"  Vision: {mv['vision']}")
+    # print(f"  Core Values: {mv['core_values']}")
     # # save
-    report.core_competencies.innovation_advantages.report_2024 = str((core_comp.get("Innovation Advantages", {}) or {}).get("2024", "N/A") or "N/A")
-    report.core_competencies.innovation_advantages.report_2023 = str((core_comp.get("Innovation Advantages", {}) or {}).get("2023", "N/A") or "N/A")
-    report.core_competencies.product_advantages.report_2024 = str((core_comp.get("Product Advantages", {}) or {}).get("2024", "N/A") or "N/A")
-    report.core_competencies.product_advantages.report_2023 = str((core_comp.get("Product Advantages", {}) or {}).get("2023", "N/A") or "N/A")
-    report.core_competencies.brand_recognition.report_2024 = str((core_comp.get("Brand Recognition", {}) or {}).get("2024", "N/A") or "N/A")
-    report.core_competencies.brand_recognition.report_2023 = str((core_comp.get("Brand Recognition", {}) or {}).get("2023", "N/A") or "N/A")
-    report.core_competencies.reputation_ratings.report_2024 = str((core_comp.get("Reputation Ratings", {}) or {}).get("2024", "N/A") or "N/A")
-    report.core_competencies.reputation_ratings.report_2023 = str((core_comp.get("Reputation Ratings", {}) or {}).get("2023", "N/A") or "N/A")
+    # report.mission_vision.mission_statement = mv['mission']
+    # report.mission_vision.vision_statement = mv['vision']
+    # report.mission_vision.core_values = mv['core_values']
+    # print("✅ COMPLETED: S1.3 - Mission & Vision")
+    # checkpoint("Section 1 - Company Overview (S1.1-S1.3)")
 
-    print("✅ S1.2 Core Competencies completed")
-    for perspective in ["Innovation Advantages", "Product Advantages", "Brand Recognition", "Reputation Ratings"]:
-        print(f"   {perspective}: 2024 ✓ | 2023 ✓")
+    # print("\n" + "="*60)
+    # print("💰 PROCESSING: S2.1 - Income Statement (2024 + 2023)")
+    # print("="*60)
+    # is_topK_2024 = llm_pick_income_statements_sections(jsonl_file_2024_path, top_k=25)
+    # is_topK_2023 = llm_pick_income_statements_sections(jsonl_file_2023_path, top_k=25)
+    # windows_info_2024, income_text_2024 = assemble_financial_statement_windows_from_ids(is_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    # windows_info_2023, income_text_2023 = assemble_financial_statement_windows_from_ids(is_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    # income_2024 = extract_income_statement(income_text_2024, years=[2024, 2023, 2022])
+    # income_2023 = extract_income_statement(income_text_2023, years=[2024, 2023, 2022])
 
-    print("\n" + "="*60)
-    print("🎯 PROCESSING: S1.3 - Mission & Vision (2024 ONLY)")
-    print("="*60)
-    mv = extract_mission_vision_values(jsonl_file_2024_path, md_file_2024)
-    print(f"  Mission: {mv['mission']}")
-    print(f"  Vision: {mv['vision']}")
-    print(f"  Core Values: {mv['core_values']}")
-    # save
-    report.mission_vision.mission_statement = mv['mission']
-    report.mission_vision.vision_statement = mv['vision']
-    report.mission_vision.core_values = mv['core_values']
-    print("✅ COMPLETED: S1.3 - Mission & Vision")
-    checkpoint("Section 1 - Company Overview (S1.1-S1.3)")
-
-    print("\n" + "="*60)
-    print("💰 PROCESSING: S2.1 - Income Statement (2024 + 2023)")
-    print("="*60)
-    is_topK_2024 = llm_pick_income_statements_sections(jsonl_file_2024_path, top_k=25)
-    is_topK_2023 = llm_pick_income_statements_sections(jsonl_file_2023_path, top_k=25)
-    windows_info_2024, income_text_2024 = assemble_financial_statement_windows_from_ids(is_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
-    windows_info_2023, income_text_2023 = assemble_financial_statement_windows_from_ids(is_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
-    income_2024 = extract_income_statement(income_text_2024, years=[2024, 2023, 2022])
-    income_2023 = extract_income_statement(income_text_2023, years=[2024, 2023, 2022])
-
-    merged_income = merge_income_statements_per_year_priority(income_2024, income_2023, years=[2024, 2023, 2022], debug=True)
+    # merged_income = merge_income_statements_per_year_priority(income_2024, income_2023, years=[2024, 2023, 2022], debug=True)
     
-    # print_income_statement_table(merged_income)
+    # # print_income_statement_table(merged_income)
             
-    for field, values in merged_income["fields"].items():
-        income_alias = {"income tax expense(benefit)": "income_tax_expense"}
-        attr_key = field.replace(" ", "_").lower()
-        attr_key = income_alias.get(attr_key, attr_key)  # apply alias if present
-        field_obj = getattr(report.income_statement, attr_key, None)
-        if isinstance(field_obj, FinancialData):
-            field_obj.year_2024 = values.get("2024", "N/A")
-            field_obj.year_2023 = values.get("2023", "N/A")
-            field_obj.year_2022 = values.get("2022", "N/A")
-            field_obj.multiplier = merged_income.get("multiplier", "Units")
-            field_obj.currency = merged_income.get("currency", "USD")      
+    # for field, values in merged_income["fields"].items():
+    #     income_alias = {"income tax expense(benefit)": "income_tax_expense"}
+    #     attr_key = field.replace(" ", "_").lower()
+    #     attr_key = income_alias.get(attr_key, attr_key)  # apply alias if present
+    #     field_obj = getattr(report.income_statement, attr_key, None)
+    #     if isinstance(field_obj, FinancialData):
+    #         field_obj.year_2024 = values.get("2024", "N/A")
+    #         field_obj.year_2023 = values.get("2023", "N/A")
+    #         field_obj.year_2022 = values.get("2022", "N/A")
+    #         field_obj.multiplier = merged_income.get("multiplier", "Units")
+    #         field_obj.currency = merged_income.get("currency", "USD")      
     
-    print("✅ S2.1 Income Statement completed")
+    # print("✅ S2.1 Income Statement completed")
 
-    print("\n" + "="*60)
-    print("💰 PROCESSING: S2.2 - Balance Sheet (2024 + 2023)")
-    print("="*60)
-    bs_topK_2024 = llm_pick_balance_sheet_sections(jsonl_file_2024_path, top_k=5)
-    bs_topK_2023 = llm_pick_balance_sheet_sections(jsonl_file_2023_path, top_k=5)
+    # print("\n" + "="*60)
+    # print("💰 PROCESSING: S2.2 - Balance Sheet (2024 + 2023)")
+    # print("="*60)
+    # bs_topK_2024 = llm_pick_balance_sheet_sections(jsonl_file_2024_path, top_k=5)
+    # bs_topK_2023 = llm_pick_balance_sheet_sections(jsonl_file_2023_path, top_k=5)
 
-    _, bs_text_2024 = assemble_financial_statement_windows_from_ids(bs_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
-    _, bs_text_2023 = assemble_financial_statement_windows_from_ids(bs_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    # _, bs_text_2024 = assemble_financial_statement_windows_from_ids(bs_topK_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=True)
+    # _, bs_text_2023 = assemble_financial_statement_windows_from_ids(bs_topK_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=True)
     
-    balance_2024 = extract_balance_sheet(bs_text_2024, years=[2024, 2023, 2022])
-    balance_2023 = extract_balance_sheet(bs_text_2023, years=[2024, 2023, 2022])
+    # balance_2024 = extract_balance_sheet(bs_text_2024, years=[2024, 2023, 2022])
+    # balance_2023 = extract_balance_sheet(bs_text_2023, years=[2024, 2023, 2022])
 
-    # print_balance_sheet_table(balance_2024)
-    # print_balance_sheet_table(balance_2023)
+    # # print_balance_sheet_table(balance_2024)
+    # # print_balance_sheet_table(balance_2023)
 
-    merged_balance = merge_balance_sheet_per_year_priority(balance_2024, balance_2023, years=[2024, 2023, 2022], debug=True)
+    # merged_balance = merge_balance_sheet_per_year_priority(balance_2024, balance_2023, years=[2024, 2023, 2022], debug=True)
 
-    # print_balance_sheet_table(merged_balance)
+    # # print_balance_sheet_table(merged_balance)
 
-    for field, values in merged_balance["fields"].items():
-        attr_name = field.replace(" ", "_").replace("'", "").replace("-", "_").lower()
-        field_obj = getattr(report.balance_sheet, attr_name, None)
-        if isinstance(field_obj, FinancialData):
-            field_obj.year_2024 = values.get("2024", "N/A")
-            field_obj.year_2023 = values.get("2023", "N/A")
-            field_obj.year_2022 = values.get("2022", "N/A")
-            field_obj.multiplier = merged_balance.get("multiplier", "Units")
-            field_obj.currency = merged_balance.get("currency", "USD")
+    # for field, values in merged_balance["fields"].items():
+    #     attr_name = field.replace(" ", "_").replace("'", "").replace("-", "_").lower()
+    #     field_obj = getattr(report.balance_sheet, attr_name, None)
+    #     if isinstance(field_obj, FinancialData):
+    #         field_obj.year_2024 = values.get("2024", "N/A")
+    #         field_obj.year_2023 = values.get("2023", "N/A")
+    #         field_obj.year_2022 = values.get("2022", "N/A")
+    #         field_obj.multiplier = merged_balance.get("multiplier", "Units")
+    #         field_obj.currency = merged_balance.get("currency", "USD")
 
-    print("✅ S2.2 Balance Sheet completed")
+    # print("✅ S2.2 Balance Sheet completed")
 
-    print("\n" + "="*60)
-    print("💰 PROCESSING: S2.3 - Cash Flow Statement (2024 + 2023)")
-    print("="*60)
-    cf_topK_2024 = llm_pick_cash_flow_sections(jsonl_file_2024_path, top_k=25)
-    cf_topK_2023 = llm_pick_cash_flow_sections(jsonl_file_2023_path, top_k=25)
+    # print("\n" + "="*60)
+    # print("💰 PROCESSING: S2.3 - Cash Flow Statement (2024 + 2023)")
+    # print("="*60)
+    # cf_topK_2024 = llm_pick_cash_flow_sections(jsonl_file_2024_path, top_k=25)
+    # cf_topK_2023 = llm_pick_cash_flow_sections(jsonl_file_2023_path, top_k=25)
 
-    cf_win_2024, cf_text_2024 = assemble_financial_statement_windows_from_ids(
-        cf_topK_2024, jsonl_file_2024_path, md_file_path_2024,
-        window_size=15, one_based_lines=True, choose_first_match_only=True
-    )
-    cf_win_2023, cf_text_2023 = assemble_financial_statement_windows_from_ids(
-        cf_topK_2023, jsonl_file_2023_path, md_file_path_2023,
-        window_size=15, one_based_lines=True, choose_first_match_only=True
-    )
+    # cf_win_2024, cf_text_2024 = assemble_financial_statement_windows_from_ids(
+    #     cf_topK_2024, jsonl_file_2024_path, md_file_path_2024,
+    #     window_size=15, one_based_lines=True, choose_first_match_only=True
+    # )
+    # cf_win_2023, cf_text_2023 = assemble_financial_statement_windows_from_ids(
+    #     cf_topK_2023, jsonl_file_2023_path, md_file_path_2023,
+    #     window_size=15, one_based_lines=True, choose_first_match_only=True
+    # )
 
-    cashflow_2024 = extract_cash_flow_statement(cf_text_2024, years=[2024, 2023, 2022])
-    cashflow_2023 = extract_cash_flow_statement(cf_text_2023, years=[2024, 2023, 2022])
+    # cashflow_2024 = extract_cash_flow_statement(cf_text_2024, years=[2024, 2023, 2022])
+    # cashflow_2023 = extract_cash_flow_statement(cf_text_2023, years=[2024, 2023, 2022])
 
-    # print_cash_flow_table(cashflow_2024)
-    # print_cash_flow_table(cashflow_2023)
+    # # print_cash_flow_table(cashflow_2024)
+    # # print_cash_flow_table(cashflow_2023)
 
-    merged_cashflow = merge_cash_flow_per_year_priority(cashflow_2024, cashflow_2023, years=[2024, 2023, 2022], debug=True)
+    # merged_cashflow = merge_cash_flow_per_year_priority(cashflow_2024, cashflow_2023, years=[2024, 2023, 2022], debug=True)
 
-    # print_cash_flow_table(merged_cashflow)
+    # # print_cash_flow_table(merged_cashflow)
 
-    mapping = {
-        "Net Cash Flow from Operations": "net_cash_from_operations",
-        "Net Cash Flow from Investing": "net_cash_from_investing",
-        "Net Cash Flow from Financing": "net_cash_from_financing",
-        "Net Increase/Decrease in Cash": "net_increase_decrease_cash",
-        "Dividends": "dividends",
-    }
+    # mapping = {
+    #     "Net Cash Flow from Operations": "net_cash_from_operations",
+    #     "Net Cash Flow from Investing": "net_cash_from_investing",
+    #     "Net Cash Flow from Financing": "net_cash_from_financing",
+    #     "Net Increase/Decrease in Cash": "net_increase_decrease_cash",
+    #     "Dividends": "dividends",
+    # }
 
-    for field_name, attr in mapping.items():
-        values = merged_cashflow["fields"].get(field_name, {})
-        field_obj = getattr(report.cash_flow_statement, attr, None)
-        if isinstance(field_obj, FinancialData):
-            field_obj.year_2024 = values.get("2024", "N/A")
-            field_obj.year_2023 = values.get("2023", "N/A")
-            field_obj.year_2022 = values.get("2022", "N/A")
-            field_obj.multiplier = merged_cashflow.get("multiplier", "Units")
-            field_obj.currency = merged_cashflow.get("currency", "USD")
+    # for field_name, attr in mapping.items():
+    #     values = merged_cashflow["fields"].get(field_name, {})
+    #     field_obj = getattr(report.cash_flow_statement, attr, None)
+    #     if isinstance(field_obj, FinancialData):
+    #         field_obj.year_2024 = values.get("2024", "N/A")
+    #         field_obj.year_2023 = values.get("2023", "N/A")
+    #         field_obj.year_2022 = values.get("2022", "N/A")
+    #         field_obj.multiplier = merged_cashflow.get("multiplier", "Units")
+    #         field_obj.currency = merged_cashflow.get("currency", "USD")
             
 
-    # --- S2.4: Key Financial Metrics ---  
-    print("🔄 PROCESSING: S2.4 - Key Financial Metrics")
+    # # --- S2.4: Key Financial Metrics ---  
+    # print("🔄 PROCESSING: S2.4 - Key Financial Metrics")
     
-    metrics = compute_key_metrics_from_tables(merged_income, merged_balance, merged_cashflow, years=[2024, 2023, 2022])
+    # metrics = compute_key_metrics_from_tables(merged_income, merged_balance, merged_cashflow, years=[2024, 2023, 2022])
     
-    for field, values in metrics["fields"].items():
-        attr = field.lower().replace(" ", "_").replace("-", "_").replace("/", "_")
-        field_obj = getattr(report.key_financial_metrics, attr, None)
-        if isinstance(field_obj, FinancialData):
-            field_obj.year_2024 = values.get("2024", "N/A")
-            field_obj.year_2023 = values.get("2023", "N/A")
-            field_obj.year_2022 = values.get("2022", "N/A")
-            field_obj.multiplier = metrics.get("multiplier", "Percent")
-            field_obj.currency = metrics.get("currency", "N/A")
+    # for field, values in metrics["fields"].items():
+    #     attr = field.lower().replace(" ", "_").replace("-", "_").replace("/", "_")
+    #     field_obj = getattr(report.key_financial_metrics, attr, None)
+    #     if isinstance(field_obj, FinancialData):
+    #         field_obj.year_2024 = values.get("2024", "N/A")
+    #         field_obj.year_2023 = values.get("2023", "N/A")
+    #         field_obj.year_2022 = values.get("2022", "N/A")
+    #         field_obj.multiplier = metrics.get("multiplier", "Percent")
+    #         field_obj.currency = metrics.get("currency", "N/A")
             
-    print_key_metrics_table(metrics)    
-    print("✅ COMPLETED: S2.4 - Key Financial Metrics")
+    # print_key_metrics_table(metrics)    
+    # print("✅ COMPLETED: S2.4 - Key Financial Metrics")
     
     
-    # --- S2.5: Operating Performance ---  
-    print("🔄 PROCESSING: S2.5 - Operating Performance")
-    op_topK_2024 = llm_pick_operating_performance_sections(jsonl_file_2024_path, top_k=15)
-    op_topK_2023 = llm_pick_operating_performance_sections(jsonl_file_2023_path, top_k=15)
+    # # --- S2.5: Operating Performance ---  
+    # print("🔄 PROCESSING: S2.5 - Operating Performance")
+    # op_topK_2024 = llm_pick_operating_performance_sections(jsonl_file_2024_path, top_k=15)
+    # op_topK_2023 = llm_pick_operating_performance_sections(jsonl_file_2023_path, top_k=15)
 
-    _, oper_text_2024 = assemble_financial_statement_windows_from_ids(
-        op_topK_2024, jsonl_file_2024_path, md_file_path_2024,
-        window_size=15, one_based_lines=True, choose_first_match_only=True
-    )
-    _, oper_text_2023 = assemble_financial_statement_windows_from_ids(
-        op_topK_2023, jsonl_file_2023_path, md_file_path_2023,
-        window_size=15, one_based_lines=True, choose_first_match_only=True
-    )
+    # _, oper_text_2024 = assemble_financial_statement_windows_from_ids(
+    #     op_topK_2024, jsonl_file_2024_path, md_file_path_2024,
+    #     window_size=15, one_based_lines=True, choose_first_match_only=True
+    # )
+    # _, oper_text_2023 = assemble_financial_statement_windows_from_ids(
+    #     op_topK_2023, jsonl_file_2023_path, md_file_path_2023,
+    #     window_size=15, one_based_lines=True, choose_first_match_only=True
+    # )
 
-    oper_2024 = extract_operating_performance(oper_text_2024, years=[2024, 2023, 2022])
-    oper_2023 = extract_operating_performance(oper_text_2023, years=[2024, 2023, 2022])
+    # oper_2024 = extract_operating_performance(oper_text_2024, years=[2024, 2023, 2022])
+    # oper_2023 = extract_operating_performance(oper_text_2023, years=[2024, 2023, 2022])
 
-    merged_operating_performance = merge_operating_performance_per_year_priority(oper_2024, oper_2023, years=[2024, 2023, 2022], debug=True)
+    # merged_operating_performance = merge_operating_performance_per_year_priority(oper_2024, oper_2023, years=[2024, 2023, 2022], debug=True)
 
-    # print_operating_performance_table(merged_operating_performance)
+    # # print_operating_performance_table(merged_operating_performance)
     
-    opf = report.operating_performance
+    # opf = report.operating_performance
 
-    rbps = merged_operating_performance["fields"].get("Revenue by Product/Service", {})
-    rbgr = merged_operating_performance["fields"].get("Revenue by Geographic Region", {})
+    # rbps = merged_operating_performance["fields"].get("Revenue by Product/Service", {})
+    # rbgr = merged_operating_performance["fields"].get("Revenue by Geographic Region", {})
 
-    opf.revenue_by_product_service.year_2024 = rbps.get("2024", "N/A")
-    opf.revenue_by_product_service.year_2023 = rbps.get("2023", "N/A")
-    opf.revenue_by_product_service.year_2022 = rbps.get("2022", "N/A")
-    opf.revenue_by_product_service.multiplier = merged_operating_performance.get("multiplier", "Units")
-    opf.revenue_by_product_service.currency = merged_operating_performance.get("currency", "USD")
+    # opf.revenue_by_product_service.year_2024 = rbps.get("2024", "N/A")
+    # opf.revenue_by_product_service.year_2023 = rbps.get("2023", "N/A")
+    # opf.revenue_by_product_service.year_2022 = rbps.get("2022", "N/A")
+    # opf.revenue_by_product_service.multiplier = merged_operating_performance.get("multiplier", "Units")
+    # opf.revenue_by_product_service.currency = merged_operating_performance.get("currency", "USD")
 
-    opf.revenue_by_geographic_region.year_2024 = rbgr.get("2024", "N/A")
-    opf.revenue_by_geographic_region.year_2023 = rbgr.get("2023", "N/A")
-    opf.revenue_by_geographic_region.year_2022 = rbgr.get("2022", "N/A")
-    opf.revenue_by_geographic_region.multiplier = merged_operating_performance.get("multiplier", "Units")
-    opf.revenue_by_geographic_region.currency = merged_operating_performance.get("currency", "USD")
-    print("✅ COMPLETED: S2.5 - Operating Performance")
+    # opf.revenue_by_geographic_region.year_2024 = rbgr.get("2024", "N/A")
+    # opf.revenue_by_geographic_region.year_2023 = rbgr.get("2023", "N/A")
+    # opf.revenue_by_geographic_region.year_2022 = rbgr.get("2022", "N/A")
+    # opf.revenue_by_geographic_region.multiplier = merged_operating_performance.get("multiplier", "Units")
+    # opf.revenue_by_geographic_region.currency = merged_operating_performance.get("currency", "USD")
+    # print("✅ COMPLETED: S2.5 - Operating Performance")
     
-    checkpoint("Section 2 - Financial Performance (S2.1-S2.5)")
+    # checkpoint("Section 2 - Financial Performance (S2.1-S2.5)")
     
 
-    # --- S3.1: Profitability Analysis ---  
-    print("🔄 PROCESSING: S3.1 - Profitability Analysis")
-    profitability_analysis = llm_build_profitability_analysis(report, merged_income=merged_income, merged_balance=merged_balance, merged_cashflow=merged_cashflow,  
-        derived_metrics=metrics, s25_operating=merged_operating_performance, years=[2024, 2023, 2022])
+    # # --- S3.1: Profitability Analysis ---  
+    # print("🔄 PROCESSING: S3.1 - Profitability Analysis")
+    # profitability_analysis = llm_build_profitability_analysis(report, merged_income=merged_income, merged_balance=merged_balance, merged_cashflow=merged_cashflow,  
+    #     derived_metrics=metrics, s25_operating=merged_operating_performance, years=[2024, 2023, 2022])
     
-    pa = report.profitability_analysis
-    pa.revenue_direct_cost_dynamics = profitability_analysis.get("Revenue & Direct-Cost Dynamics", "N/A")
-    pa.operating_efficiency = profitability_analysis.get("Operating Efficiency", "N/A")
-    pa.external_oneoff_impact = profitability_analysis.get("External & One-Off Impact", "N/A")
-    print("✅ COMPLETED: S3.1 - Profitability Analysis")
+    # pa = report.profitability_analysis
+    # pa.revenue_direct_cost_dynamics = profitability_analysis.get("Revenue & Direct-Cost Dynamics", "N/A")
+    # pa.operating_efficiency = profitability_analysis.get("Operating Efficiency", "N/A")
+    # pa.external_oneoff_impact = profitability_analysis.get("External & One-Off Impact", "N/A")
+    # print("✅ COMPLETED: S3.1 - Profitability Analysis")
 
 
-    # --- S3.2: Financial Performance Summary ---  
-    print("🔄 PROCESSING: S3.2 - Financial Performance Summary")
-    s32 = llm_build_financial_performance_summary(
-        report,
-        merged_income=merged_income,       
-        merged_balance=merged_balance,   
-        merged_cashflow=merged_cashflow, 
-        derived_metrics=metrics,
-        s25_operating=merged_operating_performance,
-        years=[2024, 2023, 2022],
-        company_name=company_name,
-        establishment_date=establishment_date,
-        company_hq=company_hq,
-    )
+    # # --- S3.2: Financial Performance Summary ---  
+    # print("🔄 PROCESSING: S3.2 - Financial Performance Summary")
+    # s32 = llm_build_financial_performance_summary(
+    #     report,
+    #     merged_income=merged_income,       
+    #     merged_balance=merged_balance,   
+    #     merged_cashflow=merged_cashflow, 
+    #     derived_metrics=metrics,
+    #     s25_operating=merged_operating_performance,
+    #     years=[2024, 2023, 2022],
+    #     company_name=company_name,
+    #     establishment_date=establishment_date,
+    #     company_hq=company_hq,
+    # )
 
-    for k, v in s32.items():
-        print(k)
-        print("  2024:", v["2024 Report"])
-        print("  2023:", v["2023 Report"])
+    # for k, v in s32.items():
+    #     print(k)
+    #     print("  2024:", v["2024 Report"])
+    #     print("  2023:", v["2023 Report"])
         
-    fps = report.financial_performance_summary
+    # fps = report.financial_performance_summary
 
-    def _fill_cc(cc: CoreCompetency, d: dict):
-        cc.report_2024 = d.get("2024 Report", "N/A")
-        cc.report_2023 = d.get("2023 Report", "N/A")
+    # def _fill_cc(cc: CoreCompetency, d: dict):
+    #     cc.report_2024 = d.get("2024 Report", "N/A")
+    #     cc.report_2023 = d.get("2023 Report", "N/A")
 
-    _fill_cc(fps.comprehensive_financial_health, s32.get("Comprehensive financial health", {}))
-    _fill_cc(fps.profitability_earnings_quality, s32.get("Profitability and earnings quality", {}))
-    _fill_cc(fps.operational_efficiency, s32.get("Operational efficiency", {}))
-    _fill_cc(fps.financial_risk_identification, s32.get("Financial risk identification and early warning", {}))
-    _fill_cc(fps.future_financial_performance_projection, s32.get("Future financial performance projection", {}))
-    print("✅ COMPLETED: S3.2 - Financial Performance Summary")
+    # _fill_cc(fps.comprehensive_financial_health, s32.get("Comprehensive financial health", {}))
+    # _fill_cc(fps.profitability_earnings_quality, s32.get("Profitability and earnings quality", {}))
+    # _fill_cc(fps.operational_efficiency, s32.get("Operational efficiency", {}))
+    # _fill_cc(fps.financial_risk_identification, s32.get("Financial risk identification and early warning", {}))
+    # _fill_cc(fps.future_financial_performance_projection, s32.get("Future financial performance projection", {}))
+    # print("✅ COMPLETED: S3.2 - Financial Performance Summary")
 
 
-    # --- S3.3: Business Competitiveness ---  
-    print("🔄 PROCESSING: S3.3 - Business Competitiveness")
-    bc_chunks_2024 = llm_pick_competitiveness_sections(jsonl_file_2024_path, top_k=10, model="gpt-4o-mini")
-    _, text_2024 = assemble_financial_statement_windows_from_ids(bc_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=5, one_based_lines=True, debug=False)
-    s33_2024 = llm_build_business_competitiveness_for_year(report, 2024, text_2024, model="gpt-4o-mini")
+    # # --- S3.3: Business Competitiveness ---  
+    # print("🔄 PROCESSING: S3.3 - Business Competitiveness")
+    # bc_chunks_2024 = llm_pick_competitiveness_sections(jsonl_file_2024_path, top_k=10, model="gpt-4o-mini")
+    # _, text_2024 = assemble_financial_statement_windows_from_ids(bc_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=5, one_based_lines=True, debug=False)
+    # s33_2024 = llm_build_business_competitiveness_for_year(report, 2024, text_2024, model="gpt-4o-mini")
 
-    bc_chunks_2023 = llm_pick_competitiveness_sections(jsonl_file_2023_path, top_k=10, model="gpt-4o-mini")
-    _, text_2023 = assemble_financial_statement_windows_from_ids(bc_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=5, one_based_lines=True, debug=False)
-    s33_2023 = llm_build_business_competitiveness_for_year(report, 2023,text_2023,model="gpt-4o-mini")
+    # bc_chunks_2023 = llm_pick_competitiveness_sections(jsonl_file_2023_path, top_k=10, model="gpt-4o-mini")
+    # _, text_2023 = assemble_financial_statement_windows_from_ids(bc_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=5, one_based_lines=True, debug=False)
+    # s33_2023 = llm_build_business_competitiveness_for_year(report, 2023,text_2023,model="gpt-4o-mini")
 
-    report.business_competitiveness.business_model_2024 = s33_2024.get("Business Model", "N/A")
-    report.business_competitiveness.market_position_2024 = s33_2024.get("Market Position", "N/A")
-    report.business_competitiveness.business_model_2023 = s33_2023.get("Business Model", "N/A")
-    report.business_competitiveness.market_position_2023 = s33_2023.get("Market Position", "N/A")
-    print("✅ COMPLETED: S3.3 - Business Competitiveness")
-    checkpoint("Section 3 - Business Analysis (S3.1-S3.3)")
-        
-        
-    # --- S4.1: Risk Factors ---
-    print("🔄 PROCESSING: S4.1 - Risk Factors")
-    rf_chunks_2024 = llm_pick_risk_sections(jsonl_file_2024_path, top_k=10)
-    rf_chunks_2023 = llm_pick_risk_sections(jsonl_file_2023_path, top_k=10)
-
-    _, text_2024 = assemble_financial_statement_windows_from_ids(rf_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=10, one_based_lines=True, choose_first_match_only=False)
-    _, text_2023 = assemble_financial_statement_windows_from_ids(rf_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=10, one_based_lines=True, choose_first_match_only=False)
-
-    risks_2024_only = extract_risk_factor(text_2024, 2024)
-    risks_2023_only = extract_risk_factor(text_2023, 2023)
-
-    f24 = risks_2024_only.get("factors", {})
-    s41_2024 = {}
-    s41_2024["Market Risks"]      = f24.get("Market Risks", {}).get("2024", "N/A")
-    s41_2024["Operational Risks"] = f24.get("Operational Risks", {}).get("2024", "N/A")
-    s41_2024["Financial Risks"]   = f24.get("Financial Risks", {}).get("2024", "N/A")
-    s41_2024["Compliance Risks"]  = f24.get("Compliance Risks", {}).get("2024", "N/A")
-
-    f23 = risks_2023_only.get("factors", {})
-    s41_2023 = {}
-    s41_2023["Market Risks"]      = f23.get("Market Risks", {}).get("2023", "N/A")
-    s41_2023["Operational Risks"] = f23.get("Operational Risks", {}).get("2023", "N/A")
-    s41_2023["Financial Risks"]   = f23.get("Financial Risks", {}).get("2023", "N/A")
-    s41_2023["Compliance Risks"]  = f23.get("Compliance Risks", {}).get("2023", "N/A")
-
-    report.risk_factors.market_risks.report_2024      = s41_2024.get("Market Risks", "N/A")
-    report.risk_factors.operational_risks.report_2024 = s41_2024.get("Operational Risks", "N/A")
-    report.risk_factors.financial_risks.report_2024   = s41_2024.get("Financial Risks", "N/A")
-    report.risk_factors.compliance_risks.report_2024  = s41_2024.get("Compliance Risks", "N/A")
-
-    report.risk_factors.market_risks.report_2023      = s41_2023.get("Market Risks", "N/A")
-    report.risk_factors.operational_risks.report_2023 = s41_2023.get("Operational Risks", "N/A")
-    report.risk_factors.financial_risks.report_2023   = s41_2023.get("Financial Risks", "N/A")
-    report.risk_factors.compliance_risks.report_2023  = s41_2023.get("Compliance Risks", "N/A")
-    print("✅ COMPLETED: S4.1 - Risk Factors")
-    checkpoint("Section 4 - Risk Factors (S4.1)")
-    
-    
-    # --- S5.1: Board Composition ---
-    print("🔄 PROCESSING: S5.1 - Board Composition")
-    director_chunks_2024 = llm_pick_director_sections(jsonl_file_2024_path, top_k=10)
-    _, director_info_text_2024 = assemble_financial_statement_windows_from_ids(director_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
-    director_income_chunks_2024 = llm_pick_pay_sections(jsonl_file_2024_path, top_k=10)
-    _, director_income_text_2024 = assemble_financial_statement_windows_from_ids(director_income_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
-
-    combined_board_text_2024 = director_info_text_2024 + "\n\n===== PAY MATERIALS =====\n\n" + director_income_text_2024
-    rows_2024 = extract_board_composition(combined_board_text_2024, max_rows=10)
-
-    print(render_board_markdown(rows_2024, currency_symbol="$", multiplier="Thousands"))
-
-    report.board_composition.members = []
-    if not rows_2024:
-        report.board_composition.members.append(BoardMember()) 
-    else:
-        for r in rows_2024:
-            name = (r.get("name") or "N/A").strip()
-            pos  = (r.get("position") or "N/A").strip()
-            pay_raw = (r.get("total_income", "N/A") or "N/A").strip()
-            report.board_composition.members.append(BoardMember(name=name, position=pos, total_income=pay_raw))
-    print("✅ COMPLETED: S5.1 - Board Composition")
+    # report.business_competitiveness.business_model_2024 = s33_2024.get("Business Model", "N/A")
+    # report.business_competitiveness.market_position_2024 = s33_2024.get("Market Position", "N/A")
+    # report.business_competitiveness.business_model_2023 = s33_2023.get("Business Model", "N/A")
+    # report.business_competitiveness.market_position_2023 = s33_2023.get("Market Position", "N/A")
+    # print("✅ COMPLETED: S3.3 - Business Competitiveness")
+    # checkpoint("Section 3 - Business Analysis (S3.1-S3.3)")
         
         
-    # --- S5.2: Internal Controls ---
-    print("🔄 PROCESSING: S5.2 - Internal Controls")
-    ids_2024 = llm_pick_controls_sections(jsonl_file_2024_path, top_k=12)
-    _, text_2024 = assemble_financial_statement_windows_from_ids(ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
-    ids_2023 = llm_pick_controls_sections(jsonl_file_2023_path, top_k=12)
-    _, text_2023 = assemble_financial_statement_windows_from_ids(ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    # # --- S4.1: Risk Factors ---
+    # print("🔄 PROCESSING: S4.1 - Risk Factors")
+    # rf_chunks_2024 = llm_pick_risk_sections(jsonl_file_2024_path, top_k=10)
+    # rf_chunks_2023 = llm_pick_risk_sections(jsonl_file_2023_path, top_k=10)
 
-    controls_2024 = extract_internal_controls_one(text_2024, year=2024)
-    controls_2023 = extract_internal_controls_one(text_2023, year=2023)
+    # _, text_2024 = assemble_financial_statement_windows_from_ids(rf_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=10, one_based_lines=True, choose_first_match_only=False)
+    # _, text_2023 = assemble_financial_statement_windows_from_ids(rf_chunks_2023, jsonl_file_2023_path, md_file_path_2023, window_size=10, one_based_lines=True, choose_first_match_only=False)
 
-    merged_controls = merge_controls_two_years(controls_2024, controls_2023)
-    # print_internal_controls_table(merged_controls)
+    # risks_2024_only = extract_risk_factor(text_2024, 2024)
+    # risks_2023_only = extract_risk_factor(text_2023, 2023)
 
-    cx = merged_controls["controls"]
-    report.internal_controls.risk_assessment_procedures.report_2024 = cx["Risk assessment procedures"]["2024"]
-    report.internal_controls.risk_assessment_procedures.report_2023 = cx["Risk assessment procedures"]["2023"]
-    report.internal_controls.control_activities.report_2024 = cx["Control activities"]["2024"]
-    report.internal_controls.control_activities.report_2023 = cx["Control activities"]["2023"]
-    report.internal_controls.monitoring_mechanisms.report_2024 = cx["Monitoring mechanisms"]["2024"]
-    report.internal_controls.monitoring_mechanisms.report_2023 = cx["Monitoring mechanisms"]["2023"]
-    report.internal_controls.identified_material_weaknesses.report_2024 = cx["Identified material weaknesses or deficiencies"]["2024"]
-    report.internal_controls.identified_material_weaknesses.report_2023 = cx["Identified material weaknesses or deficiencies"]["2023"]
-    report.internal_controls.effectiveness.report_2024 = cx["Effectiveness"]["2024"]
-    report.internal_controls.effectiveness.report_2023 = cx["Effectiveness"]["2023"]
-    print("✅ COMPLETED: S5.2 - Internal Controls")
-    checkpoint("Section 5 - Corporate Governance (S5.1-S5.2)")
+    # f24 = risks_2024_only.get("factors", {})
+    # s41_2024 = {}
+    # s41_2024["Market Risks"]      = f24.get("Market Risks", {}).get("2024", "N/A")
+    # s41_2024["Operational Risks"] = f24.get("Operational Risks", {}).get("2024", "N/A")
+    # s41_2024["Financial Risks"]   = f24.get("Financial Risks", {}).get("2024", "N/A")
+    # s41_2024["Compliance Risks"]  = f24.get("Compliance Risks", {}).get("2024", "N/A")
+
+    # f23 = risks_2023_only.get("factors", {})
+    # s41_2023 = {}
+    # s41_2023["Market Risks"]      = f23.get("Market Risks", {}).get("2023", "N/A")
+    # s41_2023["Operational Risks"] = f23.get("Operational Risks", {}).get("2023", "N/A")
+    # s41_2023["Financial Risks"]   = f23.get("Financial Risks", {}).get("2023", "N/A")
+    # s41_2023["Compliance Risks"]  = f23.get("Compliance Risks", {}).get("2023", "N/A")
+
+    # report.risk_factors.market_risks.report_2024      = s41_2024.get("Market Risks", "N/A")
+    # report.risk_factors.operational_risks.report_2024 = s41_2024.get("Operational Risks", "N/A")
+    # report.risk_factors.financial_risks.report_2024   = s41_2024.get("Financial Risks", "N/A")
+    # report.risk_factors.compliance_risks.report_2024  = s41_2024.get("Compliance Risks", "N/A")
+
+    # report.risk_factors.market_risks.report_2023      = s41_2023.get("Market Risks", "N/A")
+    # report.risk_factors.operational_risks.report_2023 = s41_2023.get("Operational Risks", "N/A")
+    # report.risk_factors.financial_risks.report_2023   = s41_2023.get("Financial Risks", "N/A")
+    # report.risk_factors.compliance_risks.report_2023  = s41_2023.get("Compliance Risks", "N/A")
+    # print("✅ COMPLETED: S4.1 - Risk Factors")
+    # checkpoint("Section 4 - Risk Factors (S4.1)")
+    
+    
+    # # --- S5.1: Board Composition ---
+    # print("🔄 PROCESSING: S5.1 - Board Composition")
+    # director_chunks_2024 = llm_pick_director_sections(jsonl_file_2024_path, top_k=10)
+    # _, director_info_text_2024 = assemble_financial_statement_windows_from_ids(director_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # director_income_chunks_2024 = llm_pick_pay_sections(jsonl_file_2024_path, top_k=10)
+    # _, director_income_text_2024 = assemble_financial_statement_windows_from_ids(director_income_chunks_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
+
+    # combined_board_text_2024 = director_info_text_2024 + "\n\n===== PAY MATERIALS =====\n\n" + director_income_text_2024
+    # rows_2024 = extract_board_composition(combined_board_text_2024, max_rows=10)
+
+    # print(render_board_markdown(rows_2024, currency_symbol="$", multiplier="Thousands"))
+
+    # report.board_composition.members = []
+    # if not rows_2024:
+    #     report.board_composition.members.append(BoardMember()) 
+    # else:
+    #     for r in rows_2024:
+    #         name = (r.get("name") or "N/A").strip()
+    #         pos  = (r.get("position") or "N/A").strip()
+    #         pay_raw = (r.get("total_income", "N/A") or "N/A").strip()
+    #         report.board_composition.members.append(BoardMember(name=name, position=pos, total_income=pay_raw))
+    # print("✅ COMPLETED: S5.1 - Board Composition")
         
         
-    # --- S6.1: Strategic Direction ---
-    print("🔄 PROCESSING: S6.1 - Strategic Direction")
-    strat_ids_2024 = llm_pick_strategy_sections(jsonl_file_2024_path, top_k=12)
-    _, strat_text_2024 = assemble_financial_statement_windows_from_ids(strat_ids_2024, jsonl_file_2024_path, md_file_path_2024,window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # # --- S5.2: Internal Controls ---
+    # print("🔄 PROCESSING: S5.2 - Internal Controls")
+    # ids_2024 = llm_pick_controls_sections(jsonl_file_2024_path, top_k=12)
+    # _, text_2024 = assemble_financial_statement_windows_from_ids(ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
+    # ids_2023 = llm_pick_controls_sections(jsonl_file_2023_path, top_k=12)
+    # _, text_2023 = assemble_financial_statement_windows_from_ids(ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
 
-    strat_ids_2023 = llm_pick_strategy_sections(jsonl_file_2023_path, top_k=12)
-    _, strat_text_2023 = assemble_financial_statement_windows_from_ids(strat_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # controls_2024 = extract_internal_controls_one(text_2024, year=2024)
+    # controls_2023 = extract_internal_controls_one(text_2023, year=2023)
 
-    sd_2024 = extract_strategic_direction_one(strat_text_2024, 2024)
-    sd_2023 = extract_strategic_direction_one(strat_text_2023, 2023)
+    # merged_controls = merge_controls_two_years(controls_2024, controls_2023)
+    # # print_internal_controls_table(merged_controls)
 
-    sd_merged = merge_strategy_two_years(sd_2024, sd_2023)
-    # print_strategic_direction_table(sd_merged)
+    # cx = merged_controls["controls"]
+    # report.internal_controls.risk_assessment_procedures.report_2024 = cx["Risk assessment procedures"]["2024"]
+    # report.internal_controls.risk_assessment_procedures.report_2023 = cx["Risk assessment procedures"]["2023"]
+    # report.internal_controls.control_activities.report_2024 = cx["Control activities"]["2024"]
+    # report.internal_controls.control_activities.report_2023 = cx["Control activities"]["2023"]
+    # report.internal_controls.monitoring_mechanisms.report_2024 = cx["Monitoring mechanisms"]["2024"]
+    # report.internal_controls.monitoring_mechanisms.report_2023 = cx["Monitoring mechanisms"]["2023"]
+    # report.internal_controls.identified_material_weaknesses.report_2024 = cx["Identified material weaknesses or deficiencies"]["2024"]
+    # report.internal_controls.identified_material_weaknesses.report_2023 = cx["Identified material weaknesses or deficiencies"]["2023"]
+    # report.internal_controls.effectiveness.report_2024 = cx["Effectiveness"]["2024"]
+    # report.internal_controls.effectiveness.report_2023 = cx["Effectiveness"]["2023"]
+    # print("✅ COMPLETED: S5.2 - Internal Controls")
+    # checkpoint("Section 5 - Corporate Governance (S5.1-S5.2)")
+        
+        
+    # # --- S6.1: Strategic Direction ---
+    # print("🔄 PROCESSING: S6.1 - Strategic Direction")
+    # strat_ids_2024 = llm_pick_strategy_sections(jsonl_file_2024_path, top_k=12)
+    # _, strat_text_2024 = assemble_financial_statement_windows_from_ids(strat_ids_2024, jsonl_file_2024_path, md_file_path_2024,window_size=12, one_based_lines=True, choose_first_match_only=False)
 
-    report.strategic_direction.mergers_acquisition.report_2024       = sd_merged["strategy"]["Mergers and Acquisition"]["2024"]
-    report.strategic_direction.mergers_acquisition.report_2023       = sd_merged["strategy"]["Mergers and Acquisition"]["2023"]
-    report.strategic_direction.new_technologies.report_2024          = sd_merged["strategy"]["New technologies"]["2024"]
-    report.strategic_direction.new_technologies.report_2023          = sd_merged["strategy"]["New technologies"]["2023"]
-    report.strategic_direction.organisational_restructuring.report_2024 = sd_merged["strategy"]["Organisational Restructuring"]["2024"]
-    report.strategic_direction.organisational_restructuring.report_2023 = sd_merged["strategy"]["Organisational Restructuring"]["2023"]
-    print("✅ COMPLETED: S6.1 - Strategic Direction")
+    # strat_ids_2023 = llm_pick_strategy_sections(jsonl_file_2023_path, top_k=12)
+    # _, strat_text_2023 = assemble_financial_statement_windows_from_ids(strat_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=12, one_based_lines=True, choose_first_match_only=False)
+
+    # sd_2024 = extract_strategic_direction_one(strat_text_2024, 2024)
+    # sd_2023 = extract_strategic_direction_one(strat_text_2023, 2023)
+
+    # sd_merged = merge_strategy_two_years(sd_2024, sd_2023)
+    # # print_strategic_direction_table(sd_merged)
+
+    # report.strategic_direction.mergers_acquisition.report_2024       = sd_merged["strategy"]["Mergers and Acquisition"]["2024"]
+    # report.strategic_direction.mergers_acquisition.report_2023       = sd_merged["strategy"]["Mergers and Acquisition"]["2023"]
+    # report.strategic_direction.new_technologies.report_2024          = sd_merged["strategy"]["New technologies"]["2024"]
+    # report.strategic_direction.new_technologies.report_2023          = sd_merged["strategy"]["New technologies"]["2023"]
+    # report.strategic_direction.organisational_restructuring.report_2024 = sd_merged["strategy"]["Organisational Restructuring"]["2024"]
+    # report.strategic_direction.organisational_restructuring.report_2023 = sd_merged["strategy"]["Organisational Restructuring"]["2023"]
+    # print("✅ COMPLETED: S6.1 - Strategic Direction")
     
 
-    # --- S6.2: Challenges and Uncertainties ---     
-    print("🔄 PROCESSING: S6.2 - Challenges and Uncertainties")
-    econ_ids_2024 = llm_pick_econ_sections(jsonl_file_2024_path, top_k=6)
-    _, econ_text_2024 = assemble_financial_statement_windows_from_ids(
-        econ_ids_2024, jsonl_file_2024_path, md_file_path_2024,
-        window_size=10, one_based_lines=True, choose_first_match_only=False
-    )
-    econ_2024 = extract_econ_one(econ_text_2024, 2024)
+    # # --- S6.2: Challenges and Uncertainties ---     
+    # print("🔄 PROCESSING: S6.2 - Challenges and Uncertainties")
+    # econ_ids_2024 = llm_pick_econ_sections(jsonl_file_2024_path, top_k=6)
+    # _, econ_text_2024 = assemble_financial_statement_windows_from_ids(
+    #     econ_ids_2024, jsonl_file_2024_path, md_file_path_2024,
+    #     window_size=10, one_based_lines=True, choose_first_match_only=False
+    # )
+    # econ_2024 = extract_econ_one(econ_text_2024, 2024)
     
-    comp_ids_2024 = llm_pick_comp_sections(jsonl_file_2024_path, top_k=6)
-    _, comp_text_2024 = assemble_financial_statement_windows_from_ids(
-        comp_ids_2024, jsonl_file_2024_path, md_file_path_2024,
-        window_size=10, one_based_lines=True, choose_first_match_only=False
-    )
-    comp_2024 = extract_comp_one(comp_text_2024, 2024)
+    # comp_ids_2024 = llm_pick_comp_sections(jsonl_file_2024_path, top_k=6)
+    # _, comp_text_2024 = assemble_financial_statement_windows_from_ids(
+    #     comp_ids_2024, jsonl_file_2024_path, md_file_path_2024,
+    #     window_size=10, one_based_lines=True, choose_first_match_only=False
+    # )
+    # comp_2024 = extract_comp_one(comp_text_2024, 2024)
     
-    econ_ids_2023 = llm_pick_econ_sections(jsonl_file_2023_path, top_k=6)
-    _, econ_text_2023 = assemble_financial_statement_windows_from_ids(
-        econ_ids_2023, jsonl_file_2023_path, md_file_path_2023,
-        window_size=10, one_based_lines=True, choose_first_match_only=False
-    )
-    econ_2023 = extract_econ_one(econ_text_2023, 2023)
+    # econ_ids_2023 = llm_pick_econ_sections(jsonl_file_2023_path, top_k=6)
+    # _, econ_text_2023 = assemble_financial_statement_windows_from_ids(
+    #     econ_ids_2023, jsonl_file_2023_path, md_file_path_2023,
+    #     window_size=10, one_based_lines=True, choose_first_match_only=False
+    # )
+    # econ_2023 = extract_econ_one(econ_text_2023, 2023)
 
-    comp_ids_2023 = llm_pick_comp_sections(jsonl_file_2023_path, top_k=6)
-    _, comp_text_2023 = assemble_financial_statement_windows_from_ids(
-        comp_ids_2023, jsonl_file_2023_path, md_file_path_2023,
-        window_size=10, one_based_lines=True, choose_first_match_only=False
-    )
-    comp_2023 = extract_comp_one(comp_text_2023, 2023)
+    # comp_ids_2023 = llm_pick_comp_sections(jsonl_file_2023_path, top_k=6)
+    # _, comp_text_2023 = assemble_financial_statement_windows_from_ids(
+    #     comp_ids_2023, jsonl_file_2023_path, md_file_path_2023,
+    #     window_size=10, one_based_lines=True, choose_first_match_only=False
+    # )
+    # comp_2023 = extract_comp_one(comp_text_2023, 2023)
     
-    report.challenges_uncertainties.economic_challenges.report_2024   = econ_2024
-    report.challenges_uncertainties.economic_challenges.report_2023   = econ_2023
-    report.challenges_uncertainties.competitive_pressures.report_2024 = comp_2024
-    report.challenges_uncertainties.competitive_pressures.report_2023 = comp_2023
-    print("✅ COMPLETED: S6.2 - Challenges and Uncertainties")
+    # report.challenges_uncertainties.economic_challenges.report_2024   = econ_2024
+    # report.challenges_uncertainties.economic_challenges.report_2023   = econ_2023
+    # report.challenges_uncertainties.competitive_pressures.report_2024 = comp_2024
+    # report.challenges_uncertainties.competitive_pressures.report_2023 = comp_2023
+    # print("✅ COMPLETED: S6.2 - Challenges and Uncertainties")
 
 
     # --- S6.3: Innovation and Development Plans ---     
-    print("🔄 PROCESSING: S6.3 - Innovation and Development Plans")
-    rd_ids_2024 = llm_pick_rd_sections(jsonl_file_2024_path, top_k=15)
-    _, rd_text_2024 = assemble_financial_statement_windows_from_ids(rd_ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
-    rd_2024 = extract_rd_one(rd_text_2024, 2024)
+    # print("🔄 PROCESSING: S6.3 - Innovation and Development Plans")
+    
+    # rd_ids_2024 = llm_pick_rd_sections(jsonl_file_2024_path, top_k=15, target_lang=target_lang)
+    # _, rd_text_2024 = assemble_financial_statement_windows_from_ids(rd_ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # rd_2024 = extract_rd_one(rd_text_2024, 2024, target_lang=target_lang)
 
-    launch_ids_2024 = llm_pick_launch_sections(jsonl_file_2024_path, top_k=15)
-    _, launch_text_2024 = assemble_financial_statement_windows_from_ids(launch_ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=15, one_based_lines=True, choose_first_match_only=False)
-    launch_2024 = extract_launch_one(launch_text_2024, 2024)
+    # launch_ids_2024 = llm_pick_launch_sections(jsonl_file_2024_path, top_k=15, target_lang=target_lang)
+    # _, launch_text_2024 = assemble_financial_statement_windows_from_ids(launch_ids_2024, jsonl_file_2024_path, md_file_path_2024, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # launch_2024 = extract_launch_one(launch_text_2024, 2024, target_lang=target_lang)
+
+    # rd_ids_2023 = llm_pick_rd_sections(jsonl_file_2023_path, top_k=15, target_lang=target_lang)
+    # _, rd_text_2023 = assemble_financial_statement_windows_from_ids(rd_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # rd_2023 = extract_rd_one(rd_text_2023, 2023, target_lang=target_lang)
+
+    # launch_ids_2023 = llm_pick_launch_sections(jsonl_file_2023_path, top_k=15, target_lang=target_lang)
+    # _, launch_text_2023 = assemble_financial_statement_windows_from_ids(launch_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=12, one_based_lines=True, choose_first_match_only=False)
+    # launch_2023 = extract_launch_one(launch_text_2023, 2023, target_lang=target_lang)
+    # # save 
+    # report.innovation_development.rd_investments.report_2024 = rd_2024
+    # report.innovation_development.rd_investments.report_2023 = rd_2023
+    # report.innovation_development.new_product_launches.report_2024 = launch_2024
+    # report.innovation_development.new_product_launches.report_2023 = launch_2023
+    # print("✅ COMPLETED: S6.3 - Innovation and Development Plans")
+    # checkpoint("Section 6 - Future Outlook (S6.1-S6.3)")
 
 
-    rd_ids_2023 = llm_pick_rd_sections(jsonl_file_2023_path, top_k=15)
-    _, rd_text_2023 = assemble_financial_statement_windows_from_ids(rd_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
-    rd_2023 = extract_rd_one(rd_text_2023, 2023)
 
-    launch_ids_2023 = llm_pick_launch_sections(jsonl_file_2023_path, top_k=15)
-    _, launch_text_2023 = assemble_financial_statement_windows_from_ids(launch_ids_2023, jsonl_file_2023_path, md_file_path_2023, window_size=15, one_based_lines=True, choose_first_match_only=False)
-    launch_2023 = extract_launch_one(launch_text_2023, 2023)
 
-    # save 
-    report.innovation_development.rd_investments.report_2024 = rd_2024
-    report.innovation_development.rd_investments.report_2023 = rd_2023
-    report.innovation_development.new_product_launches.report_2024 = launch_2024
-    report.innovation_development.new_product_launches.report_2023 = launch_2023
-    print("✅ COMPLETED: S6.3 - Innovation and Development Plans")
-    checkpoint("Section 6 - Future Outlook (S6.1-S6.3)")
+
+
+
 
     print("\n🎉 EXTRACTION PIPELINE COMPLETED SUCCESSFULLY!")
     print("All sections (S1.1-S6.3) have been processed and populated.")
     
-    # Save final complete report with unique name
-    final_path = f"artifacts/{slug}_{timestamp}_finddr_report.md"
-    save_partial_report(report, final_path, currency_code=currency_code)
-    print(f"📄 FINAL REPORT SAVED: {final_path}")
-    
-    # Calculate and display total execution time
     end_time = time.time()
     total_duration = end_time - start_time
     hours = int(total_duration // 3600)
@@ -5927,7 +5975,9 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     
     print(f"\n⏱️  TOTAL EXECUTION TIME: {hours:02d}:{minutes:02d}:{seconds:02d}")
     print(f"📊 Processing completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    
+   
+   
+   # save report  
     return report 
 
 
@@ -5936,55 +5986,46 @@ if __name__ == "__main__":
     import argparse
     from pathlib import Path
 
-    parser = argparse.ArgumentParser(
-        description="Generate DDR report using two annual reports (2024 and 2023)."
-    )
+    parser = argparse.ArgumentParser(description="Generate DDR report using two annual reports (2024 and 2023).")
 
-    parser.add_argument(
-        "--md2024",
-        required=True,
-        help="Path to the 2024 markdown file (newest annual report)",
-    )
+    parser.add_argument("--md2024", required=True, help="Path to the 2024 markdown file (newest annual report)")
 
-    parser.add_argument(
-        "--md2023",
-        required=True,
-        help="Path to the 2023 markdown file (previous year's report)",
-    )
-    
-    parser.add_argument(
-        "--currency",
-        required=True,
-        help="Currency code to display in the report (e.g., USD, EUR)",
-    )
-    
-    parser.add_argument(
-        "--output_language",
-        required=True,
-        help="Language code to display in the report (e.g., en, fr)",
-    )
+    parser.add_argument("--md2023", required=True, help="Path to the 2023 markdown file (previous year's report)")
 
+    parser.add_argument("--currency", required=True, help="Currency code to display in the report (e.g., USD, EUR)")
+
+    parser.add_argument("--output_language", required=True)
     args = parser.parse_args()
     
-    out_lang = args.output_language.lower()
-    if out_lang in ("zh-hans", "zh_cn", "zh-cn", "zh_simplified", "zh"):
-        target_lang = Lang.ZH_HANS
-    elif out_lang in ("zh-hant", "zh_tw", "zh-tw", "zh_traditional"):
-        target_lang = Lang.ZH_HANT
-    else:
+    out_lang = args.output_language
+    if out_lang == "ZH_SIM":
+        target_lang = Lang.ZH_SIM
+    elif out_lang == "ZH_TR":
+        target_lang = Lang.ZH_TR
+    elif out_lang == "EN":
         target_lang = Lang.EN
-
+    else: 
+        raise ValueError(f"Unsupported output language: {args.output_language}. Supported languages are: ZH_SIM, ZH_TR, EN.")
+    
     # Run main extraction pipeline
     report_info = extract(args.md2024, args.md2023, currency_code=args.currency, target_lang=target_lang)
 
     # Ensure output directory exists
     Path("artifacts").mkdir(parents=True, exist_ok=True)
 
-    # Create unique filename with company name and timestamp
-    company_name = report_info.basic_info.company_name or "unknown_company"
-    slug = _slugify(company_name)
+    # Create unique filename from command line argument and timestamp
+    md_path_2024 = Path(args.md2024)
+    md_file_2024 = md_path_2024.stem
+    company_from_filename = md_file_2024.split('_')[0] if '_' in md_file_2024 else md_file_2024
+    slug = _slugify(company_from_filename)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    output_file = f"artifacts/{slug}_{timestamp}_finddr_report.md"
+    
+    # Create company-specific folder for main script output
+    company_folder = f"artifacts/{slug}"
+    output_file = f"{company_folder}/final/{timestamp}_finddr_report.md"
+    
+    # Ensure directory exists
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     
     generator = DDRGenerator(report_info, currency_code=args.currency)
     generator.save_report(output_file)

@@ -319,8 +319,6 @@ if __name__ == "__main__":
 
     with open("data/parsed/nvidia_2023_raw_parsed.md", "r", encoding="utf-8") as f:
         markdown_text = f.read()
-    with open("data/parsed/catl_2023_raw_parsed.md", "r", encoding="utf-8") as f:
-        markdown_text = f.read()
     
     combined_text = retrieve_relevant_text(test_queries, top_k=5, md_file="nvidia_2023_raw_parsed")
     print(combined_text)

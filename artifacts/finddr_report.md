@@ -4,28 +4,28 @@
 
 | Field | Value |
 | :---- | :---- |
-| Company Name | Singapore Airlines Limited |
-| Establishment Date | May 28, 1972 |
-| Headquarters Location | Singapore, Singapore |
+| Company Name | 宜宾五粮液股份有限公司 |
+| Establishment Date | 08/19/1997 |
+| Headquarters Location | 中国四川省宜宾市 |
 
 
 ## S1.2 : Core Competencies
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Innovation Advantages | The SIA Group continues to embrace digital transformation, identifying over 300 use cases for Generative Artificial Intelligence (GenAI), with around 80 already implemented to enhance customer experience and operational efficiency. The KrisLab digital innovation lab collaborates with startups and research institutions, having co-developed over 70 proof-of-concepts since its inception in 2019. | Singapore Airlines continues to leverage data analytics and artificial intelligence (AI) technology to enhance customer experience, including the use of Generative AI in its Customer Insights Portal to personalize services. The introduction of innovative solutions such as the Remote Guided Vehicle and Seat Track Inspection Robot by SIAEC has improved operational efficiency and safety in maintenance processes. |
-| Product Advantages | Singapore Airlines maintains a strong focus on product leadership, with a $1.1 billion investment announced for next-generation long-haul cabin products across 41 Airbus A350-900 aircraft. The airline also upgraded its SilverKris lounges at London Heathrow and Sydney to enhance the ground experience for travelers. | The Singapore Airlines Group offers a diverse portfolio with two industry-leading brands: Singapore Airlines in the full-service premium segment and Scoot in the low-cost segment. Recent enhancements to in-flight offerings, including complimentary unlimited Wi-Fi and an expanded Premium Economy Class dining experience, reflect the Group's commitment to product leadership. |
-| Brand Recognition | SIA received the Workplace Learning Organisation of Excellence (Platinum) award at the National Workplace Learning Certification Awards on 22 November 2024, recognizing its exemplary workplace learning practices. Additionally, SIAEC was named Aftermarket Service Provider of the Year at the MRO Asia-Pacific Awards 2024. | Singapore Airlines has been recognized as the Best Airline and Best Asia-Pacific Airline at the Business Traveller Asia-Pacific Awards 2023, among other accolades. Scoot has also received multiple awards, including Best Long-Haul Low-Cost Airline at the Skytrax World Airline Awards, reinforcing its reputation in the low-cost sector. |
-| Reputation Ratings | The Group is committed to addressing environmental, social, and governance (ESG) risks, with various programs in place to drive sustainable practices. SIAEC has made progress towards its 2030 environmental targets under its decarbonisation framework, including initiatives like solar energy installation and energy efficiency upgrades. | The Group is committed to high standards of corporate governance and has implemented a robust safety management framework to ensure compliance with applicable laws and regulations. Additionally, SIAEC is working towards the full implementation of the Task Force on Climate-related Financial Disclosures framework to enhance its sustainability practices. |
+| Innovation Advantages | 公司2024年研发投入达4.05亿元，较上年增长25.85%，重点推进现代生物技术复刻老窖泥工程技术、酒体全面感知信号特征研究、酿酒原粮质量快速检测方法及五粮液园区生态因子监测体系构建。与中科院江雷院士团队合作，首次揭示白酒黄金酒度，推动智能化改造与数字化转型，强化微生物学基础研究和酒体工艺创新。公司持续推进高质量倍增工程，建设智能酿造示范车间和生态酿酒二期项目，提升生产工艺和技术能力。 | 2023年，公司研发投入3.22亿元，同比增长36.50%，建立了7大国家级创新平台，包括国家白酒产品质量监督检验中心、国家级企业技术中心、国家级工业设计中心、博士后科研站等。公司开展以白酒酿造核心微生物、健康因子、风味物质为核心的基础理论研究，推进酒体创新和工艺创新，研发了中国白酒微生物菌种资源库，收藏五粮液酿造微生物菌种400余种，发表发明专利8项，技术水平达到国际领先。智能酿造生产示范线开发及配套工艺研究实现规模生产示范应用，专利申请累计70余项。 |
+| Product Advantages | 公司产品矩阵丰富，2024年焕新上市45度、68度五粮液，发布经典五粮液10、20、30、50产品系列及多款文化酒。五粮液产品毛利率高达87.02%，主品牌市场表现稳健。公司拥有独有的1366国家级非物质文化传统酿造技艺，行业内拥有最多的中国白酒大师和工艺大师，建立了从种子到美酒的全过程一体化质量管理模式。产品风格独特，低度白酒在年轻消费群体中具有比较优势。 | 公司产品涵盖五粮液酒及五粮春、五粮醇、五粮特头曲、绵柔尖庄等五粮浓香酒产品，产品矩阵包括'1+3'，2023年开发销售18款文化酒产品。五粮液产品毛利率86.64%，其他酒产品毛利率60.16%。公司拥有独特的'1366'国家级非物质文化传统酿造技艺，12位中国白酒大师，建立了全过程质量管理模式。产区优势明显，宜宾产区被授予'中国五粮浓香核心产区'称号，古窖池群历史悠久，具有不可复制价值。 |
+| Brand Recognition | 五粮液品牌文化底蕴深厚，传承逾千年，品牌价值连续7年两位数增长，达到4498亿元，品牌价值强度指数获全球最高AAA+评级，跃居全球烈酒品牌首位。2024年品牌曝光超200亿人次，深度参与央视春晚、巴黎奥运会、博鳌亚洲论坛、APEC等高端平台活动。公司直营渠道专卖店数量超过1700家，线上电商渠道布局全面完成，市场份额稳步提升。 | 五粮液品牌文化底蕴深厚，传承逾千年，品牌价值突破4000亿元，品牌强度指数连续两年获得全球最高AAA+评级，位居白酒品牌首位。2023年成功举办多项文化活动，冠名央视春晚、秋晚，品牌露出超110亿人次。渠道覆盖全国300余座城市，专卖店数量超过1600家，线上布局抖音、快手、微信视频号等电商平台。五粮液品牌市场地位持续提升，消费者基础广泛且稳固。 |
+| Reputation Ratings | 公司2024年未因环境问题受到行政处罚，顺利通过能源管理体系和环境管理体系外部审核并获得认证证书。连续14年披露社会责任报告，连续2年披露ESG报告，荣获上市公司ESG最佳实践案例和中国酒业ESG示范企业。公司治理体系完善，信息披露连续10年获深圳证券交易所信息披露考核A级，监事会和独立董事监督机制健全，合规管理持续提升。 | 公司持续加强环境、社会及公司治理（ESG）管理，披露2023年度ESG报告。获得环境管理体系和能源管理体系认证证书，开展温室气体排放内部核查，污水处理产生沼气用于发电，减少温室气体排放。公司治理体系稳健，连续九年获得深圳证券交易所信息披露考核最高A级，董事会科学决策，监事会依法独立监督，诚信状况良好。 |
 
 
 ## S1.3 : Mission & Vision
 
 | Field | Value |
 | :---- | :---- |
-| Mission Statement | Singapore Airlines is a global company dedicated to providing air transportation services of the highest quality and to maximising returns for the benefit of its shareholders and employees. |
-| Vision Statement | N/A |
-| Core Values | Customer Focus |
+| Mission Statement | 为提升公司的投资价值，增强投资者回报，加强公司市值管理工作，公司制定了《市值管理制度》 |
+| Vision Statement | 2025 年主要发展目标是：巩固和增强稳健发展态势，推动品牌价值和市场份额双提升，营业总收入与宏观经济指标保持一致。 |
+| Core Values | 为投资者创造良好回报 |
 
 
 # Section 2: Financial Performance
@@ -34,68 +34,68 @@
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Revenue | 19,539.8 | 19,012.7 | 17,774.8 | Millions | USD |
-| Cost of Goods Sold | N/A | N/A | N/A | Millions | USD |
-| Gross Profit | N/A | N/A | N/A | Millions | USD |
-| Operating Expense | 17,830.7 | 16,285.2 | 15,082.7 | Millions | USD |
-| Operating Income | 1,709.1 | 2,727.5 | 2,692.1 | Millions | USD |
-| Net Profit | 2,812.2 | 2,695.1 | 2,163.3 | Millions | USD |
-| Income before income taxes | 2,964.8 | 3,037.1 | 2,636.8 | Millions | USD |
-| Income tax expense(benefit) | 152.6 | 342.0 | 473.5 | Millions | USD |
-| Interest Expense | 395.5 | 424.5 | 419.9 | Millions | USD |
+| Revenue | 89,175,178,322.7 | 83,272,067,317.19 | 73,968,640,704.54 | Units | CNY |
+| Cost of Goods Sold | 20,461,423,083.74 | 20,157,143,952.21 | 18,178,425,659.64 | Units | CNY |
+| Gross Profit | N/A | N/A | N/A | Units | CNY |
+| Operating Expense | 14,652,668,872.18 | 11,437,588,923.68 | 9,315,140,304.95 | Units | CNY |
+| Operating Income | 44,200,075,710.37 | 42,003,663,761.87 | 19,941,056,714.45 | Units | CNY |
+| Net Profit | 33,193,460,484.32 | 31,520,777,582.15 | 27,969,785,575.27 | Units | CNY |
+| Income before income taxes | 44,163,325,242.01 | 41,912,681,943.64 | 19,883,054,344.94 | Units | CNY |
+| Income tax expense(benefit) | 10,969,864,757.69 | 10,391,904,361.49 | 265,219,502.86 | Units | CNY |
+| Interest Expense | 40,436,892.68 | 11,618,338.87 | 48,003,667.91 | Units | CNY |
 
 
 ## S2.2: Balance Sheet
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Total Assets | 43,086.8 | 44,264.7 | N/A | Millions | SGD |
-| Current Assets | 15,641.7 | 19,299.3 | N/A | Millions | SGD |
-| Non-Current Assets | 27,445.1 | 24,965.4 | N/A | Millions | SGD |
-| Total Liabilities | 27,016.8 | 27,520.1 | N/A | Millions | SGD |
-| Current Liabilities | 12,671.7 | 13,670.9 | N/A | Millions | SGD |
-| Non-Current Liabilities | 14,345.1 | 13,849.2 | N/A | Millions | SGD |
-| Shareholders' Equity | 16,337.9 | 19,858.3 | N/A | Millions | SGD |
-| Retained Earnings | 9,243.0 | 8,218.2 | N/A | Millions | SGD |
-| Total Equity and Liabilities | 43,086.8 | 44,264.7 | N/A | Millions | SGD |
-| Inventories | 268.0 | 227.0 | N/A | Millions | SGD |
-| Prepaid Expenses | 153.9 | 105.0 | N/A | Millions | SGD |
+| Total Assets | 188,252,218,704.17 | 165,432,981,684.75 | 152,811,927,251.18 | Units | CNY |
+| Current Assets | 165,783,297,845.86 | 147,182,291,329.67 | 137,565,771,759.55 | Units | CNY |
+| Non-Current Assets | 22,468,920,858.31 | 18,250,690,355.08 | 15,246,155,491.63 | Units | CNY |
+| Total Liabilities | 51,857,424,971.48 | 33,083,608,497.58 | 36,124,899,211.08 | Units | CNY |
+| Current Liabilities | 51,026,506,357.06 | 32,683,139,984.65 | 35,759,145,250.65 | Units | CNY |
+| Non-Current Liabilities | 830,918,614.42 | 400,468,512.93 | 365,753,960.43 | Units | CNY |
+| Shareholders' Equity | 133,285,282,015.97 | 129,558,241,040.51 | 114,027,897,212.18 | Units | CNY |
+| Retained Earnings | 87,656,759,924.39 | 89,405,432,446.55 | 79,031,159,753.65 | Units | CNY |
+| Total Equity and Liabilities | 188,252,218,704.17 | 165,432,981,684.75 | 152,811,927,251.18 | Units | CNY |
+| Inventories | 18,233,702,166.62 | 17,387,841,712.87 | 15,980,657,013.57 | Units | CNY |
+| Prepaid Expenses | 144,877,853.45 | 169,425,745.15 | 135,982,868.14 | Units | CNY |
 
 
 ## S2.3: Cash Flow Statement
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Net Cash Flow from Operations | 4,707.7 | 5,042.1 | N/A | Millions | USD |
-| Net Cash Flow from Investing | (3,301.7) | (1,436.2) | N/A | Millions | USD |
-| Net Cash Flow from Financing | (4,326.5) | (8,779.1) | N/A | Millions | USD |
-| Net Increase/Decrease in Cash | (2,920.5) | (5,173.2) | N/A | Millions | USD |
-| Dividends | (1,428.8) | (1,130.2) | N/A | Millions | USD |
+| Net Cash Flow from Operations | 33,939,755,192.78 | 41,742,479,908.23 | 24,431,136,261.48 | 元 | CNY |
+| Net Cash Flow from Investing | (2,642,221,739.05) | (2,931,832,324.46) | (1,716,454,550.53) | 元 | CNY |
+| Net Cash Flow from Financing | (19,622,477,387.77) | (16,300,234,578.09) | (13,105,431,458.2) | 元 | CNY |
+| Net Increase/Decrease in Cash | 11,675,590,193.38 | 22,511,040,326.64 | 9,609,386,518.94 | 元 | CNY |
+| Dividends | 12,300,815,767.85 | 18,127,109,383.35 | 12,300,815,767.85 | 元 | CNY |
 
 
 ## S2.4: Key Financial Metrics
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Gross Margin | N/A | N/A | N/A | Millions | USD |
-| Operating Margin | 8.75% | 14.35% | 15.15% | Millions | USD |
-| Net Profit Margin | 14.39% | 14.18% | 12.17% | Millions | USD |
-| Current Ratio | 123.44% | 141.17% | N/A | Millions | USD |
-| Quick Ratio | 120.11% | 138.74% | N/A | Millions | USD |
-| Interest Coverage | 432.14% | 642.52% | 641.13% | Millions | USD |
-| Asset Turnover | 44.74% | N/A | N/A | Millions | USD |
-| Debt-to-Equity | 165.36% | 138.58% | N/A | Millions | USD |
-| Return on Equity | 15.54% | N/A | N/A | Millions | USD |
-| Return on Assets | 6.44% | N/A | N/A | Millions | USD |
-| Effective Tax Rate | 5.15% | 11.26% | 17.96% | Millions | USD |
-| Dividend Payout Ratio | 50.81% | 41.94% | N/A | Millions | USD |
+| Gross Margin | 77.05% | 75.79% | 75.42% | Units | CNY |
+| Operating Margin | 49.57% | 50.44% | 26.96% | Units | CNY |
+| Net Profit Margin | 37.22% | 37.85% | 37.81% | Units | CNY |
+| Current Ratio | 324.90% | 450.33% | 384.70% | Units | CNY |
+| Quick Ratio | 288.88% | 396.61% | 339.63% | Units | CNY |
+| Interest Coverage | 109306.31% | 361529.00% | 41540.69% | Units | CNY |
+| Asset Turnover | 50.43% | 52.33% | N/A | Units | CNY |
+| Debt-to-Equity | 38.91% | 25.54% | 31.68% | Units | CNY |
+| Return on Equity | 25.26% | 25.88% | N/A | Units | CNY |
+| Return on Assets | 18.77% | 19.81% | N/A | Units | CNY |
+| Effective Tax Rate | 24.84% | 24.79% | 1.33% | Units | CNY |
+| Dividend Payout Ratio | 37.06% | 57.51% | 43.98% | Units | CNY |
 
 ## S2.5: Operating Performance
 
 | Field | 2024 | 2023 | 2022 |
 | :---- | :---- | :---- | :---- |
-| Revenue by Product/Service | FSC: $16,676.9m, LCC: $2,255.9m, Engineering services: $521.6m, Others: $85.4m | FSC: $16,120.6m, LCC: $2,359.5m, Engineering services: $449.1m, Others: $83.5m | FSC: $15,544.3m, LCC: $1,845.2m, Engineering services: $311.3m, Others: $74.0m |
-| Revenue by Geographic Region | East Asia: $9,917.8m, Europe: $2,512.6m, South West Pacific: $2,957.7m, Americas: $1,333.7m, West Asia and Africa: $1,328.2m | East Asia: $9,522.8m, Europe: $2,518.9m, South West Pacific: $3,038.7m, Americas: $1,314.4m, West Asia and Africa: $1,408.2m | East Asia: $8,764.6m, Europe: $2,684.2m, South West Pacific: $2,715.3m, Americas: $1,419.8m, West Asia and Africa: $1,379.7m |
+| Revenue by Product/Service | 酒类：¥83,126,834,116.05，塑料制品：¥3,126,114,223.67，印刷：¥85,618,282.66，玻瓶：¥62,749,411.71，其他：¥2,773,862,288.61 | 酒类：¥76,447,093,245.62，塑料制品：¥3,186,751,790.54，印刷：¥148,586,388.77，玻瓶：¥121,727,109.44，其他：¥3,367,908,782.82 | 酒类：¥67,562,646,631.24，塑料制品：¥3,201,867,776.04，印刷：¥138,273,774.15，玻瓶：¥119,011,295.97，其他：¥2,946,841,227.14 |
+| Revenue by Geographic Region | 东部片区：¥31,290,019,510.12，南部片区：¥39,335,834,243.15，北部片区：¥12,500,980,362.78 | 东部区域：¥22,388,529,236.37，南部区域：¥6,810,441,782.70，西部区域：¥26,215,491,173.54，北部区域：¥8,074,372,025.55，中部区域：¥12,958,259,027.46 | 东部区域：¥18,985,619,872.12，南部区域：¥7,481,640,730.11，西部区域：¥21,538,460,675.15，北部区域：¥8,414,668,164.38，中部区域：¥11,142,257,189.48 |
 
 
 # Section 3: Business Analysis
@@ -104,28 +104,28 @@
 
 | Field | Answer |
 | :---- | :---- |
-| Revenue & Direct-Cost Dynamics | Revenue growth has shown a consistent upward trend from 2022 to 2024, increasing from $17,774.8 million in 2022 to $19,539.8 million in 2024, representing a growth of approximately 9.9%. The gross margin data is not available, but the operating income has fluctuated, with a slight increase from $2,692.1 million in 2022 to $2,727.5 million in 2023, followed by a decrease to $1,709.1 million in 2024. Revenue by product/service indicates that the FSC segment has grown from $15,544.3 million in 2022 to $16,676.9 million in 2024, while LCC has seen a decrease from $2,359.5 million in 2023 to $2,255.9 million in 2024. Engineering services and Others have also shown growth, particularly Engineering services which increased from $311.3 million in 2022 to $521.6 million in 2024. Geographically, East Asia remains the largest market, growing from $8,764.6 million in 2022 to $9,917.8 million in 2024, while the Americas and West Asia and Africa have shown slight declines in revenue. |
-| Operating Efficiency | Operating margin has decreased from 15.15% in 2022 to 8.75% in 2024, indicating a decline in operating efficiency. The operating income as a percentage of revenue has also decreased, reflecting a deterioration in operational performance. Operating expenses have increased significantly from $15,082.7 million in 2022 to $17,830.7 million in 2024, which suggests challenges in cost management effectiveness, as the increase in expenses has outpaced revenue growth. |
-| External & One-Off Impact | The effective tax rate has decreased significantly from 17.96% in 2022 to 5.15% in 2024, which positively impacts net profit margins, increasing from 12.17% in 2022 to 14.39% in 2024. This reduction in the tax burden may have contributed to the increase in net profit despite the decline in operating income. There are no specific non-recurring items mentioned, but the overall external economic environment may have influenced profitability, particularly in the geographic regions where revenue has shifted. |
+| Revenue & Direct-Cost Dynamics | 从2022年到2024年，公司的收入持续增长，2024年收入达到89175178322.70元，相比2022年的73968640704.54元增长了20.5%。毛利率在2024年为77.05%，显示出公司在成本控制方面的改善。按产品分解，酒类收入显著增长，从2022年的67562646631.24元增加到2024年的83126834116.05元，塑料制品和其他产品的收入变化不大。按地理区域分析，东部和南部片区的收入增长显著，尤其是南部片区从2022年的7481640730.11元增长到2024年的39335834243.15元。 |
+| Operating Efficiency | 营业利润率在2024年为49.57%，相比2022年的26.96%有了显著提升，表明公司在营运效率方面取得了显著改善。营业收入与收入的关系保持稳定，显示出公司在收入增长的同时，能够有效控制营业费用。成本管理有效性方面，营业费用从2022年的9315140304.95元增加到2024年的14652668872.18元，但营业收入的增长速度更快，表明公司在成本控制上仍有一定的优势。 |
+| External & One-Off Impact | 有效税率在2022年为1.33%，而在2023年和2024年分别上升至24.79%和24.84%，这表明公司面临的税务负担显著增加，可能会对未来的盈利能力产生压力。2022年到2024年间，非经常性项目未被提及，表明公司在此期间的财务表现较为稳定。外部因素方面，市场需求的变化和政策环境的调整可能会影响公司的盈利能力，尤其是在税率上升的背景下。 |
 
 
 ## S3.2: Financial Performance Summary
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Comprehensive financial health | In 2024, the company's total assets decreased to $43,086.8 million from $44,264.7 million in 2023, indicating a decline in asset growth. Current assets also fell significantly from $19,299.3 million to $15,641.7 million, reflecting potential liquidity concerns. Total liabilities decreased slightly from $27,520.1 million to $27,016.8 million, suggesting improved liability management. However, the debt to equity ratio increased to 165.36%, indicating a higher reliance on debt financing, which may raise concerns about financial stability. Shareholders' equity decreased from $19,858.3 million to $16,337.9 million, reflecting a weakening equity position. Overall, the financial health appears to be under pressure due to declining assets and equity. | In 2023, the company reported total assets of $44,264.7 million, with current assets at $19,299.3 million, indicating a strong liquidity position. Total liabilities were $27,520.1 million, which was manageable relative to the equity of $19,858.3 million, resulting in a debt to equity ratio of 138.58%. This suggests a balanced capital structure with a reasonable level of leverage. The company maintained a solid equity position, supported by retained earnings of $8,218.2 million. Overall, the financial health in 2023 was robust, with a strong balance sheet and manageable liabilities. |
-| Profitability and earnings quality | In 2024, the company achieved revenue of $19,539.8 million, a slight increase from $19,012.7 million in 2023. However, operating income decreased to $1,709.1 million from $2,727.5 million, indicating challenges in maintaining profitability. The net profit increased to $2,812.2 million, reflecting improved net profit margin at 14.39%, up from 14.18% in 2023. The effective tax rate dropped significantly to 5.15%, enhancing net earnings. Return on equity (ROE) was reported at 15.54%, indicating a strong return on shareholders' investment despite the decline in operating income. Overall, while net profits improved, the decline in operating income raises concerns about the sustainability of earnings quality. | In 2023, the company reported revenue of $19,012.7 million, up from $17,774.8 million in 2022, indicating strong revenue growth. Operating income was $2,727.5 million, with an operating margin of 14.35%, reflecting effective cost management. The net profit was $2,695.1 million, resulting in a net profit margin of 14.18%, which was an improvement from 12.17% in 2022. The effective tax rate was 11.26%, which was higher than in 2024, impacting net earnings. However, the absence of return ratios for 2022 limits the assessment of earnings sustainability. Overall, 2023 showed strong profitability metrics, but the rising tax rate could pose future challenges. |
-| Operational efficiency | In 2024, the operating margin decreased to 8.75% from 14.35% in 2023, indicating a decline in operational efficiency and potential cost management issues. The net cash from operations was $4,707.7 million, down from $5,042.1 million in 2023, suggesting a decrease in cash generation capabilities. The asset turnover ratio was reported at 44.74%, indicating effective utilization of assets despite the decline in total assets. Overall, operational efficiency appears to be declining, with increased operating expenses impacting margins and cash flow. | In 2023, the operating margin was 14.35%, reflecting strong operational efficiency and effective cost management. The net cash from operations was $5,042.1 million, indicating healthy cash generation. However, the increase in operating expenses to $16,285.2 million from $15,082.7 million in 2022 suggests rising costs that could impact future margins. The absence of asset turnover data for 2022 limits the ability to assess trends in asset utilization. Overall, 2023 demonstrated solid operational efficiency, but rising costs could pose challenges moving forward. |
-| Financial risk identification and early warning | In 2024, the debt to equity ratio increased to 165.36%, indicating heightened financial risk due to increased leverage. The current ratio decreased to 123.44%, down from 141.17% in 2023, suggesting potential liquidity concerns. The interest coverage ratio remained strong at 432.14%, indicating the company can comfortably meet its interest obligations. The effective tax rate dropped significantly to 5.15%, which may reduce tax-related risks. Overall, while interest coverage remains strong, the increased leverage and declining liquidity ratios raise concerns about financial stability. | In 2023, the debt to equity ratio was 138.58%, indicating a moderate level of financial risk. The current ratio was strong at 141.17%, suggesting good liquidity and the ability to meet short-term obligations. The interest coverage ratio was robust at 642.52%, indicating a strong capacity to cover interest expenses. The effective tax rate of 11.26% was higher than in 2024, which could impact net earnings. Overall, the financial risk profile in 2023 was manageable, with strong liquidity and interest coverage metrics. |
-| Future financial performance projection | Based on the 2024 data, the company may face challenges in future financial performance due to declining operating income and increased leverage. The decrease in total assets and current assets raises concerns about liquidity and operational efficiency. However, the improvement in net profit margin and return on equity suggests potential for profitability if cost management improves. Future investment activities may need to focus on enhancing operational efficiency and managing debt levels to ensure sustainable growth. | In 2023, the company demonstrated strong revenue growth and profitability, indicating a positive outlook for future financial performance. The solid operating margin and net profit margin suggest that the company is well-positioned to sustain earnings. Continued investment in growth areas, particularly in East Asia, where revenue is highest, could drive future performance. However, rising operating expenses and tax rates may pose challenges that need to be addressed to maintain profitability and cash flow sustainability. |
+| Comprehensive financial health | 2024年，公司总资产为18825221.9千万元，较2023年增长了13819237.2千万元，显示出资产规模的显著扩大。总负债为5185742.5千万元，较2023年增加了18773816.9千万元，负债水平上升，可能影响财务稳定性。股东权益为13328528.2千万元，较2023年小幅增长，表明公司在保持资本结构方面的努力。流动比率为324.9%，显示出良好的短期偿债能力，但较2023年有所下降，需关注流动性风险。 | 2023年，公司总资产为16543298.2千万元，较2022年增长了12621071.0千万元，资产规模持续扩大。总负债为3308360.8千万元，较2022年略有下降，显示出负债管理的改善。股东权益为12955824.1千万元，较2022年增长，表明公司在资本积累方面的积极表现。流动比率为450.3%，显示出较强的短期偿债能力。 |
+| Profitability and earnings quality | 2024年，公司收入为89175178.3千万元，较2023年增长了5903110.0千万元，显示出良好的收入增长趋势。净利润为33193460.5千万元，较2023年增长了1720682.2千万元，净利润率为37.22%，略有下降，表明盈利能力保持稳定。营业利润为44200075.7千万元，显示出公司在控制成本方面的有效性。 | 2023年，公司收入为83272067.3千万元，较2022年增长了9303436.8千万元，显示出良好的收入增长。净利润为31520777.6千万元，较2022年增长了3541002.3千万元，净利润率为37.85%，表明盈利能力较强。营业利润为42003663.8千万元，显示出公司在盈利质量方面的稳定性。 |
+| Operational efficiency | 2024年，营业利润率为49.57%，较2023年略有下降，表明公司在营运效率方面面临一定压力。资产周转率为50.43%，显示出公司在资产利用方面的有效性。经营性现金流为33939755.2千万元，较2023年有所下降，需关注现金流管理。 | 2023年，营业利润率为50.44%，显示出公司在营运效率方面的良好表现。资产周转率为52.33%，表明公司在资产利用方面的有效性。经营性现金流为41742479.9千万元，显示出公司在现金流管理方面的稳定性。 |
+| Financial risk identification and early warning | 2024年，负债与股东权益比率为38.91%，较2023年上升，表明公司杠杆水平增加，需关注财务风险。流动比率为324.9%，显示出短期偿债能力良好，但较2023年有所下降，需警惕流动性风险。有效税率为24.84%，较2023年略有上升，需关注税务风险。 | 2023年，负债与股东权益比率为25.54%，显示出公司杠杆水平较低，财务风险相对可控。流动比率为450.3%，显示出良好的短期偿债能力。有效税率为24.79%，表明税务风险相对稳定。 |
+| Future financial performance projection | 2024年，公司计划继续扩大投资，尽管投资现金流为负，但未来的收入增长潜力依然存在。预计经营性现金流将继续支持公司的运营和发展。分红政策保持稳定，预计将继续吸引投资者关注。 | 2023年，公司在投资方面保持谨慎，尽管现金流为负，但收入增长为未来的财务表现提供了支持。预计公司将继续维持稳定的分红政策，以增强投资者信心。 |
 
 
 ## S3.3: Business Competitiveness
 
 | Field | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Business Model | The company primarily operates as a full-service airline, generating revenue through the carriage of passengers, cargo, and mail, as well as engineering services, tour activities, and merchandise sales. Revenue is recognized when transportation is provided, and includes ticket sales, cargo services, and ancillary services such as the sale of merchandise and rental income from aircraft leases. | The company operates primarily as a Full-Service Carrier (FSC) and a Low-Cost Carrier (LCC), generating revenue from passenger and cargo air transportation, engineering services, tour activities, and merchandise sales. The FSC segment focuses on full-service passenger segments under the Singapore Airlines brand, while the LCC segment operates under the Scoot brand, targeting the low-cost passenger market. Additional revenue streams include engineering services for aircraft maintenance and overhaul, as well as a lifestyle rewards app called 'Kris+'. |
-| Market Position | Singapore Airlines (SIA) holds a strong competitive position as a market leader in the full-service premium segment, with a diversified network that reduces dependency on any single region. The company has a 25.1% stake in the enlarged Air India Group, enhancing its presence in one of the fastest-growing aviation markets. SIA's revenue for FY2024/25 reached $19,540 million, with a market share that reflects its leadership in the industry, despite facing intense competition. | The Singapore Airlines Group maintains a leading position in the airline industry, with a robust portfolio that includes Singapore Airlines and Scoot. The Group's market share is significant, with the FSC segment generating $16,177.1 million in revenue for FY2023/24, reflecting a 3.8% increase from the previous year. Scoot achieved a revenue growth of 24.5%, reaching $2,445.5 million. The Group is recognized as a market leader, ranked 2nd in the airline category by Fortune Magazine and has a strong focus on enhancing synergies between its brands to adapt to market dynamics. |
+| Business Model | 公司主要从事白酒生产和销售，采用经销模式和直销模式。经销模式通过将产品交付给购货方并在对方签收后确认收入，直销模式包括团购销售和线上销售，通过电商平台销售产品。主要收入来源于酒类产品，特别是五粮液系列，2024年营业收入达到89,175,178,322.70元，其中酒类产品收入为83,126,834,116.05元，毛利率为82.21%。 | 公司主要从事白酒生产和销售，主要通过经销模式和直销模式创造收入。经销模式占据主要份额，销售额为45,985,002,791.57元，占总营业收入的55.22%。直销模式的销售额为30,462,090,454.05元，占总营业收入的36.58%。此外，公司还通过线上销售平台如天猫、京东等进行产品销售，满足不同层次消费者的需求。 |
+| Market Position | 公司在白酒行业中处于市场领导者地位，五粮液产品在浓香型白酒市场占有率最高。2024年，五粮液产品营业收入为67,875,345,534.24元，占酒类产品总收入的81.6%。公司在全国范围内的经销商数量达到3,711家，前五大经销商销售总额占销售收入总额的15.67%。 | 公司在白酒行业中处于市场领导者地位，2023年实现营业总收入83,272,067,317.19元，同比增长12.58%。其中，酒类产品的营业收入为76,447,093,245.62元，占总收入的91.80%。公司在浓香型白酒市场中占有显著份额，特别是五粮液产品的销售额为62,804,076,723.47元，毛利率达到86.64%。 |
 
 
 # Section 4: Risk Factors
@@ -134,10 +134,10 @@
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Market Risks | The Group is exposed to market risks including fluctuations in foreign currency exchange rates, which impact operating revenues and expenses. The Group manages these risks through cash flow hedges and foreign currency forward contracts to mitigate potential losses from currency movements. | The Group is exposed to market risks including fluctuations in jet fuel prices, foreign currency exchange rates, and interest rates, which can significantly impact financial performance. The Group employs derivatives to hedge against these risks, ensuring that gains and losses on derivatives offset those on the underlying exposures. |
-| Operational Risks | Operational risks include challenges in maintaining service quality and efficiency, particularly due to ongoing infrastructure works at Singapore Changi Airport. The Group has implemented measures to optimize gate usage and enhance operational resilience to ensure a smooth travel experience for customers. | The Group faces operational risks related to supply chain disruptions and a tight labor market, which can affect service delivery and operational efficiency. To mitigate these risks, proactive recruitment and continuous improvement programs are implemented to enhance productivity and efficiency. |
-| Financial Risks | The Group faces financial risks related to foreign currency fluctuations, interest rate changes, and jet fuel price volatility. To manage these risks, the Group employs various hedging strategies, including interest rate swaps and fuel hedging contracts, to stabilize financial performance against market fluctuations. | The Group's financial risks include credit risk, liquidity risk, and market rate risk, particularly related to foreign currency and interest rate fluctuations. The Group manages these risks through a combination of hedging strategies and maintaining a resilient balance sheet with access to diverse funding sources. |
-| Compliance Risks | The Group is committed to complying with applicable laws and regulatory requirements, ensuring integrity and transparency in its operations. Regular reviews and audits are conducted to maintain compliance with legal standards and industry regulations. | The Group is committed to complying with applicable laws and regulatory requirements, with a focus on maintaining integrity and transparency in its operations. Regular reviews and oversight by the Board and dedicated compliance departments ensure adherence to legal and regulatory standards. |
+| Market Risks | 2024年报告中提到的市场风险包括内外部环境的不确定性、消费需求持续低迷以及行业竞争加剧，尤其是头部企业之间的竞争加剧。 | 内外部环境不确定性风险，需求恢复不及预期的风险，以及行业竞争加剧的风险。 |
+| Operational Risks | N/A | 公司在生产和运营中面临的风险，包括制造、供应链和技术系统的挑战。 |
+| Financial Risks | 2024年报告中识别的财务风险包括信用风险和流动性风险。公司与信誉良好的第三方进行交易，并对客户进行信用审核，持续监控应收账款以降低坏账风险。同时，公司保持充足的资金和信用额度以满足流动性要求。 | 涉及金融工具的信用风险、流动性风险和汇率风险，尤其是外币业务的汇率波动。 |
+| Compliance Risks | 2024年报告中提到公司遵循环境管理体系要求，定期收集和更新环境法律法规，确保合规性，并制定了多项环境保护管理制度。 | 公司需遵守的环境保护法律法规及行业标准，确保合规性和法律责任的履行。 |
 
 
 # Section 5: Corporate Governance
@@ -145,25 +145,28 @@
 ## S5.1: Board Composition
 | Name | Position | Total Income |
 | :---- | :---- | -----------: |
-| Peter Seah Lim Huat | Chairman (Independent) | £824,123,000 |
-| Goh Choon Phong | Chief Executive Officer | £7,013,495,000 |
-| Gautam Banerjee | (Non-Independent) | £190,000,000 |
-| Simon Cheong Sae Peng | (Independent) | £184,288,000 |
-| David John Gledhill | (Independent) | £237,000,000 |
-| Goh Swee Chen | (Independent) | £188,357,000 |
-| Dominic Ho Chiu Fai | (Independent) | £271,678,000 |
-| Lee Kim Shin | (Independent) | £171,492,000 |
-| Jeanette Wong Kai Yuan | (Independent) | £183,998,000 |
-| Yeoh Oon Jin | (Independent) | £218,998,000 |
+| 曾从钦 | 董事长; 党委书记 | ￥67.83万 |
+| 华涛 | 副董事长; 总经理 | ￥31.34万 |
+| 张宇 | 副董事长 | ￥61.02万 |
+| 肖浩 | 董事; 党委副书记 | ￥61.02万 |
+| 章欣 | 副总经理; 财务总监; 董事会秘书 | ￥61.02万 |
+| 杨韵霞 | 总工程师; 党委委员 | ￥61.02万 |
+| 蒋佳 | 副总经理; 党委委员 | ￥61.02万 |
+| 岳松 | 副总经理 | ￥61.02万 |
+| 陈翀 | 副总经理 | ￥0 |
+| 王源培 | 副总经理 | ￥0 |
+| 刘明 | 监事会主席; 党委委员 | ￥61.02万 |
+| 朱永良 | 监事 | ￥0 |
+| 李帅 | 监事 | ￥0 |
 
 ## S5.2: Internal Controls
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Risk assessment procedures | The Group employs a formalized Enterprise Risk Management Framework, developed in line with a three lines of defense model. The Risk Management Department oversees the framework, conducting ongoing reviews of risks and controls, including a group-wide Annual Risk Management Review Exercise (ARMRE) and Control Self-Assessment (CSA) to validate controls. The framework is regularly reviewed to ensure relevance and effectiveness. | The Group employs a formalised Enterprise Risk Management (ERM) Framework, which includes ongoing reviews of risks and controls, risk prioritisation, and the identification of risks overseen by the Board and its committees. The Risk Management Department conducts annual reviews and submits reports to the Board, ensuring a systematic approach to risk identification and assessment. |
-| Control activities | The Group implements various control measures, including financial, compliance, operational, and IT controls. The Control Self-Assessment (CSA) Programme allows business units to review and report on internal controls annually. The Internal Audit Division conducts independent reviews to validate these assessments. Additionally, business continuity plans (BCPs) are regularly tested and reviewed. | The Group has implemented various control measures, including financial, compliance, operational, and information technology controls. The Control Self-Assessment (CSA) Programme allows business units to review and report on the adequacy of internal controls. Additionally, the Internal Audit Division conducts risk-based audits and uses analytical tools to enhance audit effectiveness. |
-| Monitoring mechanisms | The adequacy and effectiveness of the Group's risk management and internal control systems are audited periodically by the Internal Audit Division, with findings reported to the Audit Committee (AC). The AC meets regularly with internal and external auditors to discuss audit findings and recommendations. | The Audit Committee (AC) oversees the adequacy and effectiveness of the Group's internal control systems, which are audited periodically by the Internal Audit Division. The AC meets regularly with internal and external auditors to discuss audit findings and ensure timely follow-up on recommendations. |
-| Identified material weaknesses or deficiencies | N/A | N/A |
-| Effectiveness | The Board, with the concurrence of the Board Safety and Risk Committee (BSRC) and Audit Committee (AC), concluded that the Group's risk management and internal control systems were adequate and effective as of 31 March 2025. The systems provide reasonable assurance against material errors and irregularities. | The Board, with input from the AC and BSRC, concluded that the Group's risk management and internal control systems were adequate and effective as of 31 March 2024. The systems provide reasonable assurance against foreseeable events affecting business objectives, although no system can guarantee absolute assurance. |
+| Risk assessment procedures | 2024年，公司按照《公司法》《企业内部控制基本规范》等法律法规要求，不断建立经营业务、风险管控、事后监督等板块的制度规范，持续完善内部控制制度体系。公司每年度按照国家规定开展全员参与的内部控制自我评价工作，成立内部控制自我评价领导工作组，指导车间、职能部门、子公司共57家单位开展内部控制自查工作。 | 公司按照《中华人民共和国公司法》、证监会等五部委《企业内部控制基本规范》、深交所《上市公司规范运作指引》等法律法规要求，不断建立经营业务、风险管控、事后监督等板块的制度规范，持续完善内部控制制度体系。公司每年度按照国家规定开展全员参与的内部控制自我评价工作，成立内部控制自我评价领导工作组，指导57家单位开展内部控制自查工作，评价内部控制设计的合理性和运行的有效性。 |
+| Control activities | 公司内部控制管理制度共更新21项、废止5项、新增10项。为进一步加强公司内控制度体系建设，保证公司内部控制手册的全面性和适用性，公司各单位结合国家规定和业务发展需要更新相关内部控制制度。 | 公司在内部控制手册中更新了23项、废止2项、新增34项，实施了具体控制措施、政策、程序和活动。公司将持续加强内部控制培训及学习，强化合规经营意识，增强公司风险防范能力，有效促进公司战略的稳步实施。 |
+| Monitoring mechanisms | 公司成立内部控制抽查组对公司内部控制制度的建设及实施情况进行抽查，重点关注采购、销售、生产等业务板块，评价内部控制设计的合理性和运行的有效性。审计委员会全年列席董事会、股东大会各2次，对内部控制自我评价工作实施跟踪监督。 | 公司成立内部控制抽查组对内部控制制度的建设及实施情况进行抽查，重点关注采购、销售、生产等主要业务板块。审计委员会全年召开会议6次，审议2022年度财务会计报告审计及内部控制审计报告，确保董事会运作规范、合规、有效运作。 |
+| Identified material weaknesses or deficiencies | 否 | N/A |
+| Effectiveness | 天职国际会计师事务所（特殊普通合伙）认为，公司于2024年12月31日按照《企业内部控制基本规范》和相关规定在所有重大方面保持了有效的财务报告内部控制。 | 四川华信（集团）会计师事务所认为，公司于2023年12月31日按照《企业内部控制基本规范》和相关规定在所有重大方面保持了有效的财务报告内部控制。 |
 
 
 # Section 6: Future Outlook
@@ -172,22 +175,22 @@
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Mergers and Acquisition | On 12 November 2024, SIA completed the merger of its associated company, TATA-SIA Airlines Limited ('TATASIA') and Air India Limited ('AI'). SIA holds a 25.1% stake in the enlarged AI Group, with a total cost of $2,095.5 million. This acquisition is part of SIA's strategy to strengthen its position in the fast-growing Indian aviation market, which complements its Singapore hub. Additionally, SIA made an investment of $1,099.3 million in shares of the enlarged AI Group and an additional capital injection of $499.9 million. | SIA and Tata Sons agreed to merge Air India and Vistara, which will give SIA a 25.1% stake in the expanded Air India group, enhancing its footprint in India. Additionally, SIAEC acquired a 49% stake in Pos Aviation Engineering Services for approximately $1.2 million, and further invested about $1.8 million in the company. |
-| New technologies | SIA is accelerating its digital transformation with a strong focus on Generative Artificial Intelligence (GenAI) solutions to drive revenue, improve customer service, enhance operational efficiency, and boost workforce productivity. The Group has identified over 300 use cases for GenAI, with around 80 already implemented. SIA has partnered with Salesforce and OpenAI to co-develop innovative GenAI tools. Furthermore, SIA's digital innovation lab, KrisLab, has co-developed over 70 proof-of-concepts, with more than 25 digital solutions successfully implemented across the Group. | SIA is investing in Generative Artificial Intelligence (GenAI) to enhance customer experience and operational efficiency. This includes a GenAI-powered search function on its website, a flight recommender system, and an intelligent assistant named JARVIS to improve staff productivity. SIAEC also introduced a Remote Guided Vehicle and a Seat Track Inspection Robot to enhance operational efficiency. |
-| Organisational Restructuring | SIA launched UPLIFT 2, a two-year upskilling plan to promote innovation and agility across the organisation, focusing on key behaviours such as Sharing Boldly and Creating Possibilities. The Group also introduced a mentorship programme for new managers, pairing them with senior management for guidance. Additionally, SIA has formalised a suite of executive education programmes and expanded its Learning and Development roadmap to include training in project management, negotiation, and sustainability. | SIA launched the Group Mobility Scheme to facilitate internal mobility among staff, allowing ground staff and cabin crew to move between SIA and Scoot. The Group is also focused on continuous upskilling and has enhanced its global leadership programme to prepare leaders for global roles. |
+| Mergers and Acquisition | N/A | N/A |
+| New technologies | 公司深入推进以酒体创新和工艺创新为核心的供给侧结构性创新，焕新上市 45 度、68 度五粮液，发布经典五粮液 10、20、30、50 全系产品，与中科院江雷院士团队合作，首次揭示白酒黄金酒度，科学证实了不同酒度五粮液及系列产品均处于白酒黄金度数范围。 | 公司持续推进国家级创新平台建设，大力开展以白酒酿造核心微生物、健康因子、风味物质等为核心的基础理论研究，推进以酒体创新和工艺创新为核心的供给侧结构性改革。 |
+| Organisational Restructuring | 公司将持续深入推进'135'发展战略，锚定'2118'的发展目标，统筹推进品质品牌、营销创新、高质量倍增三大工程，全面打造'生态、品质、文化、数字、阳光'五位一体五粮液。 | 公司持续加强人才队伍建设，夯实创新发展根基，分层次、分类别开展内容丰富、形式灵活的培训，预计培训超8.5万人次，以全方位、多角度、先进科学的路径培养满足五粮液发展需求的创新型、复合型、应用型人才。 |
 
 
 ## S6.2: Challenges and Uncertainties
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability. | The SIA Group faces economic challenges including rising geopolitical tensions, supply chain constraints, cost inflation, and an uncertain macroeconomic landscape due to global tariff wars. These factors contribute to increased operational costs and may impact profitability. The Group's earnings are also affected by fluctuations in jet fuel prices, foreign currency exchange rates, and interest rates, which pose financial risks. Additionally, the Group's liquidity is a concern, as it must ensure access to diverse funding sources amidst these economic uncertainties. | The airline industry will continue to face ongoing challenges, including geopolitical tensions, economic uncertainty, supply chain disruptions, and high inflation globally. These factors could impact revenue and profitability as airlines increase capacity, especially in the Asia-Pacific region, leading to moderated passenger yields. |
-| Competitive pressures from both established industry players and new, disruptive market entrants that the company faces. | The airline industry is experiencing heightened competitive pressures, with increased capacity from other carriers leading to yield declines. The SIA Group must navigate a highly competitive landscape, particularly as it faces threats from both established players and new entrants. The Group's operational performance has been impacted by these competitive dynamics, necessitating effective cost management and strategic investments in digital capabilities to maintain its market position. Furthermore, the completion of the Air India-Vistara merger introduces new competitive dynamics in the Indian aviation market. | The Group faces competitive pressures from both established industry players and new entrants, particularly as airlines increase capacity in response to strong travel demand. This heightened competition has resulted in a decline in passenger yield, indicating a challenging market environment. |
+| Economic challenges such as inflation, recession risks, and shifting consumer behavior that could impact revenue and profitability. | 一是内外部环境不确定性风险；二是消费需求持续低迷、恢复不及预期。 | 一是内外部环境不确定性风险；二是有效需求恢复不及预期的风险；三是行业竞争尤其是头部企业竞争加剧的风险。 |
+| Competitive pressures from both established industry players and new, disruptive market entrants that the company faces. | 三是行业竞争加剧尤其是头部企业竞争加剧。 | 行业竞争尤其是头部企业竞争加剧的风险。 |
 
 
 ## S6.3: Innovation and Development Plans
 
 | Perspective | 2024 Report | 2023 Report |
 | :---- | :---- | :---- |
-| R&D investments, with a focus on advancing technology, improving products, and creating new solutions to cater to market trends | Singapore Airlines Limited announced a significant $1.1 billion investment in November 2024 to install next-generation long-haul cabin products across 41 Airbus A350-900 aircraft. This investment aims to redefine the premium travel experience and includes enhancements to the KrisWorld in-flight entertainment system. Additionally, the company is focusing on digital transformation through Generative Artificial Intelligence (GenAI), with over 300 identified use cases, of which around 80 have been implemented to improve customer experience and operational efficiency. | Singapore Airlines Limited (SIA) has made significant investments in research and development, particularly in technology and innovation to enhance operational efficiency and customer experience. Notably, SIAEC introduced a Remote Guided Vehicle and a Seat Track Inspection Robot, which improved productivity and safety in aircraft maintenance. Additionally, SIAEC's Electronic Line Maintenance Integrated Technology Ecosystem (eLITE) was recognized for boosting operational efficiency. The company also invested in Generative Artificial Intelligence (GenAI) solutions to enhance customer experience and operational efficiency, including a flight recommender system and an intelligent assistant named JARVIS. |
-| New product launches, emphasizing the company's commitment to continuously introducing differentiated products | In December 2024, Singapore Airlines introduced a new Business Class amenity kit developed in partnership with Le Labo Fragrances, featuring a hand pomade, face mist, and lip balm in a unique pouch. Furthermore, the airline is set to launch all-new long-haul cabin products in the first half of 2026, which will include a luxurious First Class cabin in its A350-900ULR aircraft, enhancing the overall travel experience. The company also expanded its route network with new non-stop services to Brussels, London Gatwick, and Beijing Daxing in 2024. | In 2023, Singapore Airlines launched several new products and enhancements to existing services, demonstrating its commitment to product leadership. The airline began offering complimentary unlimited Wi-Fi access across all cabin classes, marking a significant industry advancement. Additionally, a revamped Premium Economy Class experience was introduced, featuring an expanded food and beverage menu and a new amenity kit, the first major update since 2015. SIA also launched the KrisWorld Digital platform, allowing customers to preview in-flight entertainment options before their flights, enhancing the overall customer experience. |
+| R&D investments, with a focus on advancing technology, improving products, and creating new solutions to cater to market trends | 2024年公司研发投入金额为405,053,632.27元，同比增长25.85%。主要研发项目包括现代生物技术复刻老窖泥工程技术研究，旨在复刻自然老熟窖泥的功能特性，提升优酒率；五粮液'酒体全面'感知信号特征及规律研究，科学解析五粮液饮用的生理信号；酿酒原粮质量快速检测方法的研究，开发基于多模态传感器的快检方法；以及五粮液园区生态因子监测体系的构建，利用大数据分析生态环境与酿酒品质的关系。这些项目将显著提升公司的技术能力和市场竞争力。 | 2023年公司研发投入金额为321,845,165.28元，同比增长36.50%，主要集中在生产工艺等科研项目的投入。公司已建立7大国家级创新平台，持续推进以白酒酿造核心微生物、健康因子、风味物质等为核心的基础理论研究，推进酒体创新和工艺创新。 |
+| New product launches, emphasizing the company's commitment to continuously introducing differentiated products | 2024年公司发布了45度、68度五粮液及经典五粮液10、20、30、50全系产品，持续推出差异化产品以满足市场需求。此外，推出了金熊猫纪念酒和考古五粮液等文化酒，强化品牌形象和市场影响力。通过与中科院江雷院士团队的合作，首次揭示了白酒黄金酒度，进一步巩固了行业技术领先地位。 | 2023年，公司推出了紫气东来五粮液等18款文化酒产品，强化了经典五粮液市场培育，推动了2000+价位带的白酒市场。新产品的发布旨在满足不同层次消费者的多样化需求，进一步提升品牌市场地位。 |

@@ -188,54 +188,119 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
     Extract basic company information using FAISS search from 2024 report only.
     """
     # Search for relevant sections about company information
-    search_queries_EN = [
-        "company name establishment date headquarters",
-        "company profile basic information",
-        "about the company history founding",
-        "corporate information establishment"
-    ]
-    
-    search_queries_ZH_SIM = [
-        "公司名称 成立时间 总部",
-        "公司简介 基本信息",
-        "公司历史 创立 关于公司",
-        "企业信息 成立"
-    ]
-    
-    search_queries_ZH_TR = [
-        "公司名稱 成立時間 總部",
-        "公司簡介 基本資訊",
-        "公司歷史 創立 關於公司",
-        "企業資訊 成立"
-    ]
+    if TARGET_LANGUAGE == Lang.EN:
+        search_queries = [
+            "company name",
+            "company information", 
+            "headquarters", 
+            "company name establishment date headquarters",
+            "company profile basic information",
+            "about the company history founding",
+            "corporate information establishment"
+        ]
+    elif TARGET_LANGUAGE == Lang.ZH_SIM:
+        search_queries = [
+            "公司名称 成立时间 总部",
+            "公司简介 基本信息",
+            "公司历史 创立 关于公司",
+            "企业信息 成立"
+        ]
+    elif TARGET_LANGUAGE == Lang.ZH_TR:
+        search_queries = [
+            "公司名稱 成立時間 總部",
+            "公司簡介 基本資訊",
+            "公司歷史 創立 關於公司",
+            "企業資訊 成立"
+        ]
 
-    context = retrieve_relevant_text(search_queries_EN if TARGET_LANGUAGE == Lang.EN else 
-        search_queries_ZH_SIM if TARGET_LANGUAGE == Lang.ZH_SIM else search_queries_ZH_TR if 
-        TARGET_LANGUAGE == Lang.ZH_TR else "Invalid Language", top_k, md_file_2024)
+    context = retrieve_relevant_text(search_queries, top_k, md_file_2024)
+    if(len(context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    
+    if TARGET_LANGUAGE == Lang.EN:
+        prompt = f"""
+            Extract the following basic company information from the provided text (TEXT_2024) only:
+            1. Company Name (full legal name)
+            2. Establishment Date (Month, Day, Year) — the date the company was founded/incorporated
+            3. Headquarters Location formatted as "City, Country" (e.g., "San Francisco, United States")
 
-    # Extract information using LLM
-    prompt = f"""
-    Extract the following basic company information from the provided text:
-    1. Company Name (full legal name)
-    2. Establishment Date (Month, Date, Year) (when the company was founded/established)
-    3. Headquarters Location city followed by country (e.g. city, country), add (North/South) if applicable.
-    - If in English: "city, country" format (e.g., "San Francisco, United States")
-    - If in Chinese: "国家省份城市" format without spaces or punctuation (e.g., "中国福建省宁德市" for Simplified or "中國廣東省深圳市" for Traditional)
-    
-    Your output MUST be in {display_lang(TARGET_LANGUAGE)}.
-    
-    Return as JSON with exactly these three keys:
-    {{
-        "company_name": "...",
-        "establishment_date": "...",
-        "headquarters": "...",
-    }}
-    
-    If any information is not found, use "N/A" as the value.
-    
-    TEXT:
-    {context}
-    """
+            Rules:
+            - Use only what is explicitly stated in TEXT_2024. No external knowledge, no assumptions.
+            - Return verbatim wording for the company name if a full legal name is shown.
+            - If multiple addresses are listed, prioritize: "Headquarters" > "Registered Office" > "Principal Place of Business".
+            - If any item is not found, use "N/A".
+
+            Your output MUST be in {display_lang(TARGET_LANGUAGE)}.
+
+            Return JSON with exactly these three keys:
+            {{
+            "company_name": "...",
+            "establishment_date": "...",
+            "headquarters": "..."
+            }}
+
+            TEXT_2024:
+            {context}
+            """.strip()
+            
+    elif TARGET_LANGUAGE == Lang.ZH_SIM:          
+        prompt = f"""
+            请仅基于 TEXT_2024 提取如下公司基础信息：
+            1. 公司名称（完整法定名称）
+            2. 成立日期（以“月/日/年”的形式；若原文为中文日期，请保持原文或可读中文格式）
+            3. 总部所在地，按“国家省份城市”的顺序输出，不要包含空格或标点（例如：“中国福建省宁德市”）。
+            如文本仅提供“城市 + 国家”，请保留该顺序（例如：“新加坡新加坡市”或“美国加利福尼亚州旧金山”）。
+            如存在多个地址，请按优先级选择： “总部” > “注册办公地址” > “主要营业地点”。
+
+            规则：
+            - 仅使用 TEXT_2024 中明确出现的信息，不得臆测或使用外部知识。
+            - 公司名称尽量保留原文全称。
+            - 任一项未找到请填写 "N/A"。
+
+            你的输出语言必须为 {display_lang(TARGET_LANGUAGE)}。
+
+            仅返回 JSON，且必须严格包含以下三个键：
+            {{
+            "company_name": "...",
+            "establishment_date": "...",
+            "headquarters": "..."
+            }}
+
+            TEXT_2024：
+            {context}
+            """.strip()
+              
+    elif TARGET_LANGUAGE == Lang.ZH_TR:
+        prompt = f"""
+            請僅基於 TEXT_2024 提取如下公司基礎資訊：
+            1. 公司名稱（完整法定名稱）
+            2. 成立日期（以「月/日/年」的形式；若原文為中文日期，請保留原文或可讀中文格式）
+            3. 總部所在地，按「國家省份城市」的順序輸出，不要包含空格或標點（例如：「中國福建省寧德市」）。
+            若文本僅提供「城市 + 國家」，請保留該順序（例如：「新加坡新加坡市」或「美國加利福尼亞州舊金山」）。
+            若存在多個地址，請依優先級選擇：「總部」 > 「註冊辦公地址」 > 「主要營業地點」。
+
+            規則：
+            - 僅使用 TEXT_2024 中明確出現的資訊，不得臆測或使用外部知識。
+            - 公司名稱盡量保留原文全稱。
+            - 任一項未找到請填入 "N/A"。
+
+            你的輸出語言必須為 {display_lang(TARGET_LANGUAGE)}。
+
+            僅返回 JSON，且必須嚴格包含以下三個鍵：
+            {{
+            "company_name": "...",
+            "establishment_date": "...",
+            "headquarters": "..."
+            }}
+
+            TEXT_2024：
+            {context}
+            """.strip()
+
     try:
         response = client.chat.completions.create(
             model=model,
@@ -349,39 +414,105 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
         all_queries.extend(queries_list)
 
     context = retrieve_relevant_text(all_queries, top_k, md_file)
-    # print(context)
+    if(len(context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
     
-    prompt = f"""
-        You are extracting a company's CORE COMPETENCIES for {year} from TEXT_{year} ONLY.
+    if TARGET_LANGUAGE == Lang.EN:
+        prompt = f"""
+            You are extracting a company's CORE COMPETENCIES for {year} from TEXT_{year} ONLY.
 
-        STRICT INSTRUCTIONS
-        - Use ONLY TEXT_{year}. No external knowledge, no assumptions, no cross-year mixing.
-        - Write in neutral, third-person business disclosure style (never "we").
-        - 1–3 sentences per competency. Keep it concise and factual; prefer named units/programs/platforms if present.
-        - Do not introduce numbers, awards, rankings, market shares, or customer names unless explicitly present in TEXT_{year}.
-        - Avoid marketing adjectives unless verbatim in TEXT_{year}.
-        - Keep categories distinct:
-        • Innovation Advantages = value-chain and capability themes (e.g., R&D, design/manufacture, in-service support, digital/AI tooling, engineering/talent, platforms/libraries).
-        • Product Advantages = portfolio breadth/depth, key categories/technologies, suitability/fit; light positioning allowed only if stated (e.g., “significant share in …”).
-        • Brand Recognition = positioning in niche/high-barrier markets, “preferred supplier”, long-term relationships; include awards ONLY if named in TEXT_{year}.
-        • Reputation Ratings = ESG/ratings/certifications/stakeholder governance or compliance statements; include rating names/years ONLY if stated.
-        - Exclude items out of scope: operational capacity expansions, factory builds, contracts/awards not tied to brand/reputation, forward-looking promises, generic strategy unless grounded in TEXT_{year}.
-        - If a competency is not supported by TEXT_{year}, set it to "N/A".
+            STRICT INSTRUCTIONS
+            - Use ONLY TEXT_{year}. No external knowledge, no assumptions, no cross-year mixing.
+            - Write in neutral, third-person business disclosure style (never "we").
+            - 1–3 sentences per competency. Keep it concise and factual; prefer named units/programs/platforms if present.
+            - Do not introduce numbers, awards, rankings, market shares, or customer names unless explicitly present in TEXT_{year}.
+            - Avoid marketing adjectives unless verbatim in TEXT_{year}.
+            - Keep categories distinct:
+            • Innovation Advantages = value-chain and capability themes (e.g., R&D, design/manufacture, in-service support, digital/AI tooling, engineering/talent, platforms/libraries).
+            • Product Advantages = portfolio breadth/depth, key categories/technologies, suitability/fit; light positioning allowed only if stated (e.g., “significant share in …”).
+            • Brand Recognition = positioning in niche/high-barrier markets, “preferred supplier”, long-term relationships; include awards ONLY if named in TEXT_{year}.
+            • Reputation Ratings = ESG/ratings/certifications/stakeholder governance or compliance statements; include rating names/years ONLY if stated.
+            - Exclude items out of scope: operational capacity expansions, factory builds, contracts/awards not tied to brand/reputation, forward-looking promises, generic strategy unless grounded in TEXT_{year}.
+            - If a competency is not supported by TEXT_{year}, set it to "N/A".
+
+            OUTPUT (JSON ONLY with these EXACT four keys):
+            {{
+            "Innovation Advantages": "…",
+            "Product Advantages": "…",
+            "Brand Recognition": "…",
+            "Reputation Ratings": "…"
+            }}
+
+            TEXT_{year}:
+            {context}
+            """
         
-        Your output MUST be in {display_lang(TARGET_LANGUAGE)}.
+    elif TARGET_LANGUAGE == Lang.ZH_SIM:
+        prompt = f"""
+            你将仅基于 TEXT_{year} 提取公司的「核心竞争力」（四项）。
 
-        OUTPUT (JSON ONLY with these EXACT four keys):
-        {{
-        "Innovation Advantages": "…",
-        "Product Advantages": "…",
-        "Brand Recognition": "…",
-        "Reputation Ratings": "…"
-        }}
+            严格要求：
+            - 只能使用 TEXT_{year} 的内容；不得使用外部知识、不得主观推断、不得跨年份混用。
+            - 采用中性、第三人称披露风格（不要使用“我们”）。
+            - 每个维度 1–3 句，简明客观；若文本中出现平台/项目/体系等专有名词，请优先使用其原文。
+            - 未在 TEXT_{year} 明确出现的数字、奖项、排名、市场份额、客户名称一律不得引入。
+            - 非 TEXT_{year} 原文的营销性形容词不要使用。
+            - 分类边界（务必区分）：
+            • 创新优势：价值链与能力主题（如：研发、设计/制造、服役支持、数字化/AI工具、工程与人才、平台/库等）。
+            • 产品优势：产品/技术组合的广度与深度、关键品类/技术、适配性；如涉及定位表述，仅当 TEXT_{year} 明确出现时才能使用。
+            • 品牌认可度：在细分/高壁垒市场的定位、“首选供应商”、长期合作关系；奖项仅在 TEXT_{year} 指明时可使用并保持原文。
+            • 声誉评级：ESG/评级/认证/治理与合规等陈述；评级名称/年份仅在 TEXT_{year} 明确出现时可写。
+            - 若某一项在 TEXT_{year} 中无充分支撑，填入 "N/A"。
 
-        TEXT_{year}:
-        {context}
-        """
+            你的输出语言必须为 {display_lang}。
+
+            仅返回 JSON，且必须严格包含以下四个英文键：
+            {{
+            "Innovation Advantages": "…",
+            "Product Advantages": "…",
+            "Brand Recognition": "…",
+            "Reputation Ratings": "…"
+            }}
+
+            TEXT_{year}：
+            {context}
+            """.strip()
             
+    elif TARGET_LANGUAGE == Lang.ZH_TR:
+        prompt = f"""
+            你將僅基於 TEXT_{year} 提取公司的「核心競爭力」（四項）。
+
+            嚴格要求：
+            - 只能使用 TEXT_{year} 的內容；不得使用外部知識、不得主觀推斷、不得跨年份混用。
+            - 採用中性、第三人稱披露風格（不要使用「我們」）。
+            - 每個面向 1–3 句，簡明客觀；若文本中出現平台／項目／體系等專有名詞，請優先使用其原文。
+            - 未在 TEXT_{year} 明確出現的數字、獎項、排名、市場份額、客戶名稱一律不得引入。
+            - 非 TEXT_{year} 原文的行銷性形容詞不要使用。
+            - 分類邊界（務必區分）：
+            • 創新優勢：價值鏈與能力主題（如：研發、設計／製造、在役支持、數位化／AI工具、工程與人才、平台／函式庫等）。
+            • 產品優勢：產品／技術組合的廣度與深度、關鍵品類／技術、適配性；如涉及定位表述，僅當 TEXT_{year} 明確出現時才能使用。
+            • 品牌認可度：在細分／高門檻市場的定位、「首選供應商」、長期合作關係；獎項僅在 TEXT_{year} 指明時方可使用並保持原文。
+            • 聲譽評級：ESG／評級／認證／治理與合規等陳述；評級名稱／年份僅在 TEXT_{year} 明確出現時可寫。
+            - 若某一項在 TEXT_{year} 中無充分支撐，填入 "N/A"。
+
+            你的輸出語言必須為 {display_lang}。
+
+            僅返回 JSON，且必須嚴格包含以下四個英文鍵：
+            {{
+            "Innovation Advantages": "…",
+            "Product Advantages": "…",
+            "Brand Recognition": "…",
+            "Reputation Ratings": "…"
+            }}
+
+            TEXT_{year}：
+            {context}
+            """.strip()
+        
     try:
         response = client.chat.completions.create(
             model=model,
@@ -414,65 +545,108 @@ def merge_core_competencies(comp_2024: dict, comp_2023: dict) -> dict:
             "2024": comp_2024.get(key, "N/A"),
             "2023": comp_2023.get(key, "N/A")
         }
-    # print(merged)
     return merged
 
-
-# ===================== S1.3: Mission & Vision with FAISS Search =====================
 
 def extract_s1_3(md_file_2024: str, top_k: int = 5, model: str = "gpt-4o-mini"):
     """
     Extract mission, vision, and core values using one combined FAISS search and LLM call.
+    Supports EN, ZH-Simplified, ZH-Traditional prompts with strict JSON output.
     """
-    # Define search queries for all components
-    search_queries_EN = [
-        "mission statement", "company mission statement", "our mission", "mission", "vision statement",
-        "company vision statement", "our vision", "vision future",
-        "core values principles", "corporate values", "company values beliefs"
-    ]
-    
-    search_queries_ZH_SIM = [
-        "公司使命", "我们的使命", "使命",
-        "公司愿景", "我们的愿景", "愿景 未来",
-        "核心价值观", "企业价值观", "公司价值观 理念"
-    ]
+    if TARGET_LANGUAGE == Lang.EN:
+        search_queries = [
+            "core values",
+            "mission statement", "company mission statement", "our mission", "mission",
+            "vision statement", "company vision statement", "our vision", "vision future",
+            "core values principles", "corporate values", "company values beliefs"
+        ]
+    elif TARGET_LANGUAGE == Lang.ZH_SIM:
+        search_queries = [
+            "公司使命", "我们的使命", "使命",
+            "公司愿景", "我们的愿景", "愿景 未来",
+            "核心价值观", "企业价值观", "公司价值观 理念"
+        ]
+    elif TARGET_LANGUAGE == Lang.ZH_TR:
+        search_queries = [
+            "公司使命", "我們的使命", "使命",
+            "公司願景", "我們的願景", "願景 未來",
+            "核心價值觀", "企業價值觀", "公司價值觀 理念"
+        ]
+        
+    context = retrieve_relevant_text(search_queries, top_k, md_file_2024)
+    if(len(context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
 
-    search_queries_ZH_TR = [
-        "公司使命", "我們的使命", "使命",
-        "公司願景", "我們的願景", "願景 未來",
-        "核心價值觀", "企業價值觀", "公司價值觀 理念"
-    ]
-    
-    QUERY_MAP = {
-        Lang.EN: search_queries_EN,
-        Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR
-    }
+    if TARGET_LANGUAGE == Lang.EN:
+        prompt = f"""
+            Extract the company's mission statement, vision statement, and core values from the provided text.
 
-    context = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
-    
-    prompt = f"""
-        Extract the company's mission statement, vision statement, and core values from the provided text.
-        
-        Return as JSON with exactly these three keys:
-        {{
-            "mission": "the exact mission statement or 'N/A'",
-            "vision": "the exact vision statement or 'N/A'", 
-            "core_values": "the core values/principles listed concisely or 'N/A'"
-        }}
-        
-        Instructions:
-        - Extract only what is explicitly stated in the text
-        - Return the exact wording when found
-        - Use "N/A" if any component is not found
-        - For core values, list them concisely (e.g., "Integrity, Innovation, Excellence")
-        
-        Your output MUST be in {display_lang(TARGET_LANGUAGE)}.
-        
-        TEXT:
-        {context}
-        """
-    
+            Instructions:
+            - Extract only what is explicitly stated in the text.
+            - Return the exact wording when found (verbatim).
+            - Use "N/A" if any component is not found.
+            - List ALL the core values (e.g., "Integrity, Innovation, Excellence ...") if present.
+
+            Return JSON with exactly these three keys (keys must be in English):
+            {{
+                "mission": "the exact mission statement or 'N/A'",
+                "vision": "the exact vision statement or 'N/A'",
+                "core_values": "the core values/principles listed concisely or 'N/A'"
+            }}
+
+            Your output MUST be in {display_lang}.
+            TEXT:
+            {context}
+            """.strip()
+            
+    elif TARGET_LANGUAGE == Lang.ZH_SIM:
+        prompt = f"""
+            请从提供的文本中提取公司的使命、愿景和核心价值观。
+
+            要求：
+            - 仅提取文本中明确出现的内容，不要臆测。
+            - 如果找到，请逐字返回原文（保持原始措辞）。
+            - 如未找到某项，填入 "N/A"。
+            - 如有核心价值观，请“完整列出全部条目”（例如：“诚信、创新、卓越 ……”）。
+
+            请只返回 JSON，且必须严格包含以下三个键（键名使用英文）：
+            {{
+                "mission": "公司的使命原文或 'N/A'",
+                "vision": "公司的愿景原文或 'N/A'",
+                "core_values": "核心价值观的简明列表原文或 'N/A'"
+            }}
+
+            你的输出语言必须为 {display_lang}。
+            文本：
+            {context}
+            """.strip()
+            
+    elif TARGET_LANGUAGE == Lang.ZH_TR:
+        prompt = f"""
+            請從提供的文本中提取公司的使命、願景與核心價值觀。
+
+            要求：
+            - 僅提取文本中明確出現的內容，不可臆測。
+            - 若找到，請逐字返回原文（保持原始措辭）。
+            - 若未找到某一項，請填入 "N/A"。
+            - 若有核心價值觀，請「完整列出全部條目」（例如：「誠信、創新、卓越 ……」）。
+
+            請只返回 JSON，且必須嚴格包含以下三個鍵（鍵名使用英文）：
+            {{
+                "mission": "公司的使命原文或 'N/A'",
+                "vision": "公司的願景原文或 'N/A'",
+                "core_values": "核心價值觀的簡明列表原文或 'N/A'"
+            }}
+
+            你的輸出語言必須為 {display_lang}。
+            文本：
+            {context}
+            """.strip()
+
     try:
         response = client.chat.completions.create(
             model=model,
@@ -548,6 +722,13 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     === 2023 FINANCIAL DATA ===
     {context_2023}
     """
+    
+    if(len(combined_context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
     
     # print(combined_context)
     
@@ -697,7 +878,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 "tax_expense": "数值或 N/A",
                 "interest_expense": "数值或 N/A"
             }},
-            "multiplier": "抄写报表中出现的单位，仅限以下之一：Units / 千万->Thousands / Millions / Billions",
+            "multiplier": "抄写报表中出现的单位，仅限以下之一：千万->Thousands / Millions / Billions",
             "currency": "根据上下文判断：CNY / USD / GBP / EUR 等"
             }}
 
@@ -742,7 +923,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 * 若出現「單位：萬元」→ multiplier = "Ten-Thousands"（但建議換算為 Thousands）
                 * 若出現「單位：百萬元」或「單位：百萬」→ multiplier = "Millions"
                 * 若出現「單位：億元」或「單位：十億」→ multiplier = "Billions"
-            - 輸出的 multiplier 必須使用英文標準格式（Thousands / Millions / Billions / Units），不得包含中文單位（如「萬元」、「百萬元」等）。
+            - 輸出的 multiplier 必須使用英文標準格式（Thousands / Millions / Billions），不得包含中文單位（如「萬元」、「百萬元」等）。
             - 依據文本標註的貨幣（人民幣／CNY／USD／GBP／EUR 等）輸出 currency，並使用標準三位字母代碼。
 
             輸出要求：
@@ -782,7 +963,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 "tax_expense": "數值或 N/A",
                 "interest_expense": "數值或 N/A"
             }},
-            "multiplier": "根據上下文判斷：Thousands / Millions / Billions / Units",
+            "multiplier": "根據上下文判斷：Thousands / Millions / Billions",
             "currency": "根據上下文判斷：CNY / USD / GBP / EUR 等"
             }}
 
@@ -905,6 +1086,13 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
     {context_2023}
     """
     
+    if(len(combined_context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    
     # print(f"{len(combined_context)} {combined_context}")
     
     if TARGET_LANGUAGE == Lang.EN:
@@ -934,16 +1122,15 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
             - If data is missing for a given year, return "N/A".
             - DO NOT compute or infer any values — use only what is explicitly shown.
             - DO NOT round numbers; keep their full precision as written.
-            - Always use the CONSOLIDATED Balance Sheet ("合并资产负债表" / "Consolidated Balance Sheet") 
-            and ignore "Parent Company Balance Sheet" ("母公司资产负债表").
+            - Always use the CONSOLIDATED Balance Sheet ("Consolidated Balance Sheet") 
+            and ignore "Parent Company Balance Sheet".
             - Copy numeric strings exactly as they appear, including commas and decimals.
-            - If the table header shows a unit such as "单位：千元" or "单位：万元":
             - Use that information only for the "multiplier" field.
             - DO NOT adjust or scale the numeric values.
             - Example:
                 * If the table says "单位：千元" and shows "786,658,123", output "786,658,123" and set multiplier = "Thousands".
                 * If the table says "单位：万元" and shows "40,091,704", output "40,091,704" and set multiplier = "Ten-Thousands".
-            - The multiplier must always be in English (Units / Thousands / Ten-Thousands / Millions / Billions).
+            - The multiplier must always be in English (Thousands / Ten-Thousands / Millions / Billions).
             - The currency must always be in its ISO 3-letter code (CNY, USD, GBP, EUR, etc.).
             - DO NOT convert all numbers to millions — preserve the same scale as shown in the document.
 
@@ -989,7 +1176,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
                 "inventories": "numeric value or N/A",
                 "prepaid_expenses": "numeric value or N/A"
             }},
-            "multiplier": "copied directly from the table header: Units / Thousands / Ten-Thousands / Millions / Billions",
+            "multiplier": "copied directly from the table header: / Thousands / Ten-Thousands / Millions / Billions",
             "currency": "copied directly from the table header: CNY / USD / GBP / EUR, etc."
             }}
 
@@ -1031,7 +1218,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
                 * 若表头为“单位：千元”，且表中显示“786,658,123”，请输出 "786,658,123"，并将 multiplier 设为 "Thousands"；
                 * 若表头为“单位：万元”，且表中显示“40,091,704”，请输出 "40,091,704"，并将 multiplier 设为 "Ten-Thousands"。
 
-            - multiplier 必须使用英文（Units / Thousands / Ten-Thousands / Millions / Billions）。
+            - multiplier 必须使用英文（Thousands / Millions / Billions）。
             - currency 必须使用三位货币代码（CNY / USD / GBP / EUR 等）。
             - 不得统一转换为“Millions”；请严格保留报表中的原始计量单位。
 
@@ -1078,7 +1265,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
                 "inventories": "数值或 N/A",
                 "prepaid_expenses": "数值或 N/A"
             }},
-            "multiplier": "根据表头原文确定：Units / Thousands / Ten-Thousands / Millions / Billions",
+            "multiplier": "根据表头原文确定：Thousands / Ten-Thousands / Millions / Billions",
             "currency": "根据表头原文确定：CNY / USD / GBP / EUR 等"
             }}
 
@@ -1120,7 +1307,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
                 * 若表頭為「單位：千元」，且表中顯示「786,658,123」，請輸出 "786,658,123"，並將 multiplier 設為 "Thousands"。
                 * 若表頭為「單位：萬元」，且表中顯示「40,091,704」，請輸出 "40,091,704"，並將 multiplier 設為 "Ten-Thousands"。
 
-            - multiplier 必須使用英文（Units / Thousands / Millions / Billions）。
+            - multiplier 必須使用英文（Thousands / Millions / Billions）。
             - currency 必須使用三位貨幣代碼（CNY / USD / GBP / EUR 等）。
             - 不得將所有數值轉換為「Millions」，請保留報表中的原始單位。
 
@@ -1167,7 +1354,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
                 "inventories": "數值或 N/A",
                 "prepaid_expenses": "數值或 N/A"
             }},
-            "multiplier": "根據表頭原文判定：Units / Thousands / Millions / Billions",
+            "multiplier": "根據表頭原文判定：Thousands / Millions / Billions",
             "currency": "根據表頭原文判定：CNY / USD / GBP / EUR 等"
             }}
 
@@ -1284,6 +1471,13 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     === 2023 CASH FLOW DATA ===
     {context_2023}
     """
+    
+    if(len( combined_context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
 
     # ----------------- Build prompt -----------------
     if TARGET_LANGUAGE == Lang.EN:
@@ -1304,7 +1498,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - Keep parentheses for negative numbers.
         - Do NOT round, infer, or rescale.
         - Use "N/A" if a field is missing.
-        - Determine "multiplier" (Units / Thousands / Millions / Billions) from header context like "in millions".
+        - Determine "multiplier" (Thousands / Millions / Billions) from header context like "in millions".
         - Determine "currency" from symbols or text (e.g., GBP, USD, CNY).
         - Do not include totals or subtotals beyond the above items.
         - Use the CONSOLIDATED cash flow statement only.
@@ -1333,7 +1527,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 "net_increase_decrease_in_cash": "numeric or N/A",
                 "dividends": "numeric or N/A"
             }},
-            "multiplier": "Units / Thousands / Millions / Billions",
+            "multiplier": "Thousands / Millions / Billions",
             "currency": "USD / GBP / EUR / CNY, etc."
         }}
 
@@ -1357,7 +1551,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - 仅提取数字，不含货币符号或单位。
         - 若为负值，请保留括号或负号。
         - 若项目不存在，请返回 "N/A"。
-        - multiplier 请从表头单位中提取（Units / Thousands / Millions / Billions）。
+        - multiplier 请从表头单位中提取（Thousands / Millions / Billions）。
         - currency 请从货币符号或说明中识别（如 CNY / USD / GBP）。
         - 不要推算或调整数值。
 
@@ -1385,7 +1579,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 "net_increase_decrease_in_cash": "数值或 N/A",
                 "dividends": "数值或 N/A"
             }},
-            "multiplier": "Units / Thousands / Millions / Billions",
+            "multiplier": "Thousands / Millions / Billions",
             "currency": "CNY / USD / GBP / EUR 等"
         }}
 
@@ -1409,7 +1603,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - 僅擷取數字，不含貨幣符號或單位。
         - 若為負值，保留括號或負號。
         - 若欄位缺失，返回 "N/A"。
-        - multiplier 由表頭單位推斷（Units / Thousands / Millions / Billions）。
+        - multiplier 由表頭單位推斷（Thousands / Millions / Billions）。
         - currency 由幣別說明判定（如 CNY / USD / GBP / EUR）。
 
         請輸出以下 JSON 結構：
@@ -1436,7 +1630,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 "net_increase_decrease_in_cash": "數值或 N/A",
                 "dividends": "數值或 N/A"
             }},
-            "multiplier": "Units / Thousands / Millions / Billions",
+            "multiplier": "Thousands / Millions / Billions",
             "currency": "CNY / USD / GBP / EUR 等"
         }}
 
@@ -1640,6 +1834,13 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     === 2023 Operating Performance Context ===
     {context_2023}
     """
+    
+    if(len(combined_context) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
 
     # ------------------------------------------------------
     # 3. Build extraction prompt
@@ -2369,6 +2570,19 @@ def extract_s3_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     business_and_market_context_2024 = retrieve_relevant_text(business_and_market_queries, top_k, md_file_2024)
     business_and_market_context_2023 = retrieve_relevant_text(business_and_market_queries, top_k, md_file_2023)
     
+    if len(business_and_market_context_2023) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2023 {len(business_and_market_context_2023)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    if len(business_and_market_context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(business_and_market_context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    
     # Extract Business Competitiveness for each year with combined contexts
     result_2024 = _extract_business_competitiveness_single_year(business_and_market_context_2024, "2024", model)
     result_2023 = _extract_business_competitiveness_single_year(business_and_market_context_2023, "2023", model)
@@ -2569,6 +2783,19 @@ def extract_s4_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     # Search and get context for 2023 
     print("🔍 Searching for Risk Factors information in 2023 report...")
     context_2023 = retrieve_relevant_text(risk_queries, top_k, md_file_2023)
+    
+    if len(context_2023) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    if len(context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
     
     # Extract Risk Factors for 2024
     result_2024 = _extract_risk_factors_single_year(context_2024, "2024", model)
@@ -2773,6 +3000,13 @@ def extract_s5_1(md_file_2024: str, top_k: int = 15, model: str = "gpt-4o-mini")
     # Search and get context for 2024 only
     print("🔍 Searching for Board Composition information in 2024 report...")
     context_2024 = retrieve_relevant_text(board_queries, top_k, md_file_2024)
+    
+    if len(context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
     
     # Extract Board Composition for 2024
     result = _extract_board_composition(context_2024, model)
@@ -2986,6 +3220,19 @@ def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     # Search and get context for 2023 
     print("🔍 Searching for Internal Controls information in 2023 report...")
     context_2023 = retrieve_relevant_text(internal_controls_queries, top_k, md_file_2023)
+    
+    if len(context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    if len(context_2023) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
     
     # Extract Internal Controls for 2024
     result_2024 = _extract_internal_controls_single_year(context_2024, "2024", model)
@@ -3208,6 +3455,19 @@ def extract_s6_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     print("🔍 Searching for Strategic Direction information in 2023 report...")
     context_2023 = retrieve_relevant_text(strategic_queries, top_k, md_file_2023)
     
+    if len(context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    if len(context_2023) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    
     # Extract Strategic Direction for 2024
     result_2024 = _extract_strategic_direction_single_year(context_2024, "2024", model)
     
@@ -3393,6 +3653,19 @@ def extract_s6_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     print("🔍 Searching for Challenges and Uncertainties information in 2023 report...")
     context_2023 = retrieve_relevant_text(challenges_queries, top_k, md_file_2023)
     
+    if len(context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    if len(context_2023) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    
     # Extract Challenges and Uncertainties for 2024
     result_2024 = _extract_challenges_uncertainties_single_year(context_2024, "2024", model)
     
@@ -3571,6 +3844,19 @@ def extract_s6_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     # Search and get context for 2023 
     print("🔍 Searching for Innovation and Development Plans information in 2023 report...")
     context_2023 = retrieve_relevant_text(innovation_queries, top_k, md_file_2023)
+    
+    if len(context_2024) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    if len(context_2023) > 350_000:
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
     
     # Extract Innovation and Development Plans for 2024
     result_2024 = _extract_innovation_development_single_year(context_2024, "2024", model)
@@ -3776,7 +4062,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("📋 PROCESSING: S1.1 - Basic Information (2024 with RAG)")
     print("="*60)
     
-    company_name, establishment_date, headquarters = extract_s1_1(md_file_2024, top_k=20)
+    company_name, establishment_date, headquarters = extract_s1_1(md_file_2024, top_k=20, model="gpt-4o-mini")
 
     report.basic_info.company_name = company_name
     report.basic_info.establishment_date = establishment_date
@@ -3789,9 +4075,8 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("🎯 PROCESSING: S1.2 - Core Competencies (2024 + 2023 with RAG)")
     print("="*60)
     
-    # Use FAISS search for core competencies
-    core_comp_2024 = extract_s1_2(md_file=md_file_2024, top_k=7, year=2024, model="gpt-4o-mini")
-    core_comp_2023 = extract_s1_2(md_file=md_file_2023, top_k=7, year=2023, model="gpt-4o-mini")
+    core_comp_2024 = extract_s1_2(md_file=md_file_2024, top_k=7, year=2024, model="gpt-4.1-mini")
+    core_comp_2023 = extract_s1_2(md_file=md_file_2023, top_k=7, year=2023, model="gpt-4.1-mini")
     core_comp = merge_core_competencies(core_comp_2024, core_comp_2023)
     
     # Save to report
@@ -3811,7 +4096,9 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
     
     # only use 2024's report for mission & vision
-    mv = extract_s1_3(md_file_2024)
+    mv = extract_s1_3(md_file_2024, top_k=20, model="gpt-4o-mini")
+    
+     # Save to report
     
     report.mission_vision.mission_statement = mv['mission']
     report.mission_vision.vision_statement = mv['vision']
@@ -4184,6 +4471,8 @@ if __name__ == "__main__":
     parser.add_argument("--md2024", required=True, help="Path to the 2024 markdown file (newest annual report)")
 
     parser.add_argument("--md2023", required=True, help="Path to the 2023 markdown file (previous year's report)")
+    
+    parser.add_argument("--currency", default="USD", help="Currency code for the report (default: USD)")
 
     parser.add_argument("--output_language", required=True)
     args = parser.parse_args()

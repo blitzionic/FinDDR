@@ -760,7 +760,7 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
 
 # ===================== Section 2: Financial Statements with FAISS Search =====================
 
-def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = "gpt-4o-mini"):
+def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = "gpt-4.1-mini"):
     """
     Extract financial statements using FAISS search for specific statement types.
     """
@@ -806,6 +806,8 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     {context_2023}
     """
     
+    print(combined_context)
+    
     if(len(combined_context) > 350_000):
         print(f"===========================================================================")
         print(f"===========================================================================")
@@ -835,7 +837,11 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - Extract ONLY the numerical values and the multiplier
         - If a value is in parentheses or marked as negative, do not change
         - If data is not available for a specific year, use "N/A"
-        - DO NOT COMPUTE any values, DO NOT MAKE UP any values if not present in text
+        - DO NOT COMPUTE any values, DO NOT MAKE UP any values if not present in text, unless:
+                sub-items correspond to one target item (e.g. sum of different costs of goods sold = Cost of Goods Sold), 
+                you MAY compute their sum.
+        - Only do this if the sub-items clearly and exclusively belong to that category.
+        - Use the same multiplier and currency as the section header.
         - DO NOT ROUND numbers - keep original precision
         
         Return as JSON with EXACTLY this structure:
@@ -880,7 +886,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         Instructions:
         
         - Extract numerical values only (e.g., "150.5" not "£150.5 million")
-        - Include negative values with minus sign if applicable
+        - Include negative values with () if applicable
         - Use "N/A" if a field cannot be found
         - Determine the multiplier from context (look for "in thousands", "in millions", etc.)
         - Identify the currency from the financial statements
@@ -2199,6 +2205,7 @@ def extract_s3_1(report, model: str = "gpt-4.1-mini"):
         - Focus on trends, patterns, and business insights
         - Structure your analysis around the three key perspectives below
         - Output format: Return EXACTLY ONE JSON object with EXACTLY the three keys shown below
+        - Use the currency and multiplier exactly as provided (do not convert units).
         
         Analyze the following three perspectives:
         
@@ -3222,7 +3229,7 @@ def _extract_board_composition(context: str, model: str):
         print(f"Error in _extract_board_composition: {e}")
         
 
-def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4o-mini"):
+def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
     """
     Extract Section 5.2 Internal Controls using RAG search.
     Analyzes Risk assessment procedures, Control activities, Monitoring mechanisms, 
@@ -3837,7 +3844,7 @@ def _extract_challenges_uncertainties_single_year(context: str, year: str, model
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=2000
+            max_tokens=1600
         )
         
         result = _safe_json_from_llm(response.choices[0].message.content)
@@ -4253,7 +4260,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
     
     # Use FAISS search for cash flow
-    cashflow_data = extract_s2_3(md_file_2024, md_file_2023, top_k=10, model="gpt-4o-mini")
+    cashflow_data = extract_s2_3(md_file_2024, md_file_2023, top_k=10, model="gpt-4.1-mini")
     
     fields = [
         ("net_cash_from_operations", "net_cash_from_operations"),
@@ -4468,7 +4475,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
 
     # Extract business competitiveness using RAG search
-    business_competitiveness = extract_s3_3(md_file_2024, md_file_2023, top_k=15, model="gpt-4o-mini")
+    business_competitiveness = extract_s3_3(md_file_2024, md_file_2023, top_k=15, model="gpt-4.1-mini")
 
     # Save to report structure
     comp = report.business_competitiveness
@@ -4519,7 +4526,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
 
     # Extract board composition using RAG search (2024 only)
-    board_composition = extract_s5_1(md_file_2024, top_k=8, model="gpt-4o-mini")
+    board_composition = extract_s5_1(md_file_2024, top_k=8, model="gpt-4.1-mini")
 
     # Save to report structure (you'll need to add these fields to your CompanyReport dataclass)
     report.board_composition.members = board_composition["board_members"]
@@ -4536,7 +4543,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
 
     # Extract internal controls using RAG search
-    internal_controls = extract_s5_2(md_file_2024, md_file_2023, top_k=15, model="gpt-4o-mini")
+    internal_controls = extract_s5_2(md_file_2024, md_file_2023, top_k=15, model="gpt-4.1-mini")
 
     # Save to report structure
     ic = report.internal_controls
@@ -4564,7 +4571,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
 
     # Extract strategic direction using RAG search
-    strategic_direction = extract_s6_1(md_file_2024, md_file_2023, top_k=15, model="gpt-4o-mini")
+    strategic_direction = extract_s6_1(md_file_2024, md_file_2023, top_k=15, model="gpt-4.1-mini")
 
     # Save to report structure
     sd = report.strategic_direction

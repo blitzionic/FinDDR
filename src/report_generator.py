@@ -363,11 +363,11 @@ class DDRGenerator:
         metrics = self.report.key_financial_metrics
         
         income_currency = getattr(self.report.income_statement, "primary_currency", self.currency_code)
-        income_multiplier = getattr(self.report.income_statement, "primary_multiplier", "Units")
+        income_multiplier = getattr(self.report.income_statement, "primary_multiplier", "")
         balance_currency = getattr(self.report.balance_sheet, "primary_currency", self.currency_code)
-        balance_multiplier = getattr(self.report.balance_sheet, "primary_multiplier", "Units")
+        balance_multiplier = getattr(self.report.balance_sheet, "primary_multiplier", "")
         cash_currency = getattr(self.report.cash_flow_statement, "primary_currency", self.currency_code)
-        cash_multiplier = getattr(self.report.cash_flow_statement, "primary_multiplier", "Units")
+        cash_multiplier = getattr(self.report.cash_flow_statement, "primary_multiplier", "")
         kfm = self.report.key_financial_metrics
 
         md = f"""
@@ -392,28 +392,28 @@ class DDRGenerator:
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-{self.make_row("Total Assets", bal.total_assets, balance_multiplier, balance_currency)}
-{self.make_row("Current Assets", bal.current_assets, balance_multiplier, balance_currency)}
-{self.make_row("Non-Current Assets", bal.non_current_assets, balance_multiplier, balance_currency)}
-{self.make_row("Total Liabilities", bal.total_liabilities, balance_multiplier, balance_currency)}
-{self.make_row("Current Liabilities", bal.current_liabilities, balance_multiplier, balance_currency)}
-{self.make_row("Non-Current Liabilities", bal.non_current_liabilities, balance_multiplier, balance_currency)}
-{self.make_row("Shareholders' Equity", bal.shareholders_equity, balance_multiplier, balance_currency)}
-{self.make_row("Retained Earnings", bal.retained_earnings, balance_multiplier, balance_currency)}
-{self.make_row("Total Equity and Liabilities", bal.total_equity_and_liabilities, balance_multiplier, balance_currency)}
-{self.make_row("Inventories", bal.inventories, balance_multiplier, balance_currency)}
-{self.make_row("Prepaid Expenses", bal.prepaid_expenses, balance_multiplier, balance_currency)}
+{self.make_row("Total Assets", bal.total_assets, income_multiplier, income_currency)}
+{self.make_row("Current Assets", bal.current_assets, income_multiplier, income_currency)}
+{self.make_row("Non-Current Assets", bal.non_current_assets, income_multiplier, income_currency)}
+{self.make_row("Total Liabilities", bal.total_liabilities, income_multiplier, income_currency)}
+{self.make_row("Current Liabilities", bal.current_liabilities, income_multiplier, income_currency)}
+{self.make_row("Non-Current Liabilities", bal.non_current_liabilities, income_multiplier, income_currency)}
+{self.make_row("Shareholders' Equity", bal.shareholders_equity, income_multiplier, income_currency)}
+{self.make_row("Retained Earnings", bal.retained_earnings, income_multiplier, income_currency)}
+{self.make_row("Total Equity and Liabilities", bal.total_equity_and_liabilities, income_multiplier, income_currency)}
+{self.make_row("Inventories", bal.inventories, income_multiplier, income_currency)}
+{self.make_row("Prepaid Expenses", bal.prepaid_expenses, income_multiplier, income_currency)}
 
 
 ## S2.3: Cash Flow Statement
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-{self.make_row("Net Cash Flow from Operations", cf.net_cash_from_operations, cash_multiplier, cash_currency)}
-{self.make_row("Net Cash Flow from Investing", cf.net_cash_from_investing, cash_multiplier, cash_currency)}
-{self.make_row("Net Cash Flow from Financing", cf.net_cash_from_financing, cash_multiplier, cash_currency)}
-{self.make_row("Net Increase/Decrease in Cash", cf.net_increase_decrease_cash, cash_multiplier, cash_currency)}
-{self.make_row("Dividends", cf.dividends, cash_multiplier, cash_currency)}
+{self.make_row("Net Cash Flow from Operations", cf.net_cash_from_operations, income_multiplier, income_currency)}
+{self.make_row("Net Cash Flow from Investing", cf.net_cash_from_investing, income_multiplier, income_currency)}
+{self.make_row("Net Cash Flow from Financing", cf.net_cash_from_financing, income_multiplier, income_currency)}
+{self.make_row("Net Increase/Decrease in Cash", cf.net_increase_decrease_cash, income_multiplier, income_currency)}
+{self.make_row("Dividends", cf.dividends, income_multiplier, income_currency)}
 
 
 ## S2.4: Key Financial Metrics

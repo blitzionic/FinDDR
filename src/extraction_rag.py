@@ -50,46 +50,33 @@ def _clip(n: int, low: int, high: int) -> int:
     return n
 
 def _safe_json_from_llm(s: str) -> dict:
-    """
-    Extract and parse the first valid JSON object from an LLM response.
-    Handles code fences, multi-line JSON, and stray characters.
-    """
-    import json, re
+    if s is None:
+        return {}
+    # strip code fences
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s.strip(), flags=re.IGNORECASE)
 
-    if not s or not isinstance(s, str):
+    # try plain JSON first
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+
+    # extract first {...} block if there’s extra text
+    m = re.search(r"\{.*\}", s, flags=re.DOTALL)
+    if not m:
         return {}
 
-    # 1. Remove markdown code fences if present
-    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s.strip(), flags=re.IGNORECASE | re.MULTILINE)
+    js = m.group(0)
 
-    # 2. Find the *first* balanced JSON object using a bracket counter
-    start = s.find("{")
-    if start == -1:
-        return {}
+    # fix common issues: trailing commas before } or ]
+    js = re.sub(r",\s*([}\]])", r"\1", js)
 
-    brace_count = 0
-    end = -1
-    for i, ch in enumerate(s[start:], start=start):
-        if ch == "{":
-            brace_count += 1
-        elif ch == "}":
-            brace_count -= 1
-            if brace_count == 0:
-                end = i
-                break
-
-    if end == -1:
-        return {}
-
-    json_str = s[start:end + 1]
-
-    # 3. Clean common trailing artifacts
-    json_str = json_str.replace("```", "").strip()
+    # normalize smart quotes
+    js = js.replace("“", '"').replace("”", '"').replace("’", "'")
 
     try:
-        return json.loads(json_str)
-    except Exception as e:
-        print(f"[WARN] JSON decode failed: {e}\n--- JSON STR ---\n{json_str[:500]}\n----------------")
+        return json.loads(js)
+    except Exception:
         return {}
 
 def _normalize_na(v) -> str:
@@ -316,7 +303,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         - If multiple addresses are listed, prioritize: "Headquarters" > "Registered Office" > "Principal Place of Business".
         - If any item is not found, use "N/A".
 
-        Your output MUST be in {display_lang(TARGET_LANGUAGE)}.
+        Your output MUST be in English.
 
         Return JSON with exactly these three keys:
         {{
@@ -343,7 +330,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         - 公司名称尽量保留原文全称。
         - 任一项未找到请填写 "N/A"。
 
-        你的输出语言必须为 {display_lang(TARGET_LANGUAGE)}。
+        你的输出语言必须为简体中文。
 
         仅返回 JSON，且必须严格包含以下三个键：
         {{
@@ -370,7 +357,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         - 公司名稱盡量保留原文全稱。
         - 任一項未找到請填入 "N/A"。
 
-        你的輸出語言必須為 {display_lang(TARGET_LANGUAGE)}。
+        你的輸出語言必須為繁體中文。
 
         僅返回 JSON，且必須嚴格包含以下三個鍵：
         {{
@@ -520,6 +507,7 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
         • Reputation Ratings = ESG/ratings/certifications/stakeholder governance or compliance statements; include rating names/years ONLY if stated.
         - Exclude items out of scope: operational capacity expansions, factory builds, contracts/awards not tied to brand/reputation, forward-looking promises, generic strategy unless grounded in TEXT_{year}.
         - If a competency is not supported by TEXT_{year}, set it to "N/A".
+        - Your output MUST be in ENGLISH. 
 
         OUTPUT (JSON ONLY with these EXACT four keys):
         {{
@@ -550,7 +538,7 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
         • 声誉评级：ESG/评级/认证/治理与合规等陈述；评级名称/年份仅在 TEXT_{year} 明确出现时可写。
         - 若某一项在 TEXT_{year} 中无充分支撑，填入 "N/A"。
 
-        你的输出语言必须为 {display_lang(TARGET_LANGUAGE)}。
+        你的输出语言必须为简体中文。
 
         仅返回 JSON，且必须严格包含以下四个英文键：
         {{
@@ -581,7 +569,7 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
         • 聲譽評級：ESG／評級／認證／治理與合規等陳述；評級名稱／年份僅在 TEXT_{year} 明確出現時可寫。
         - 若某一項在 TEXT_{year} 中無充分支撐，填入 "N/A"。
 
-        你的輸出語言必須為 {display_lang}。
+        你的輸出語言必須為繁體中文。
 
         僅返回 JSON，且必須嚴格包含以下四個英文鍵：
         {{
@@ -674,6 +662,7 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
         - Return the exact wording when found (verbatim).
         - Use "N/A" if any component is not found.
         - List ALL the core values (e.g., "Integrity, Innovation, Excellence ...") if present.
+        - ** Your output MUST be in English**
 
         Return JSON with exactly these three keys (keys must be in English):
         {{
@@ -682,7 +671,6 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
             "core_values": "the core values/principles listed concisely or 'N/A'"
         }}
 
-        Your output MUST be in {display_lang}.
         TEXT:
         {context}
         """.strip()
@@ -704,7 +692,7 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
             "core_values": "核心价值观的简明列表原文或 'N/A'"
         }}
 
-        你的输出语言必须为 {display_lang(TARGET_LANGUAGE)}。
+        你的输出语言必须为简体中文。
         文本：
         {context}
         """.strip()
@@ -726,7 +714,7 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
             "core_values": "核心價值觀的簡明列表原文或 'N/A'"
         }}
 
-        你的輸出語言必須為 {display_lang}。
+        你的輸出語言必須為繁體中文。
         文本：
         {context}
         """.strip()
@@ -806,7 +794,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     {context_2023}
     """
     
-    print(combined_context)
+    # print(combined_context)
     
     if(len(combined_context) > 350_000):
         print(f"===========================================================================")
@@ -820,7 +808,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
         You are extracting income statement data from annual reports for 2024, 2023, and 2022.
-        You are extracting the CONSOLIDATED income statement (合并利润表 / 合併損益表 / Consolidated Income Statement) 
+        You are extracting the CONSOLIDATED income statement (Consolidated Income Statement) 
         
         Look for these specific financial statement items for each year:
         - Revenue/Sales/Turnover
@@ -880,7 +868,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
             "interest_expense": "numerical value or N/A"
         }},
         "multiplier": "determine from context: Thousands/Millions/Billions",
-        "currency": "determine from context: USD/GBP/EUR/CNY etc"
+        "currency": "determine from context: USD/GBP/CNY/IDR (Indonesia)/MYR (Malaysia) etc"
         }}    
         
         Instructions:
@@ -1013,7 +1001,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
             * 若出現「單位：百萬元」或「單位：百萬」→ multiplier = "Millions"
             * 若出現「單位：億元」或「單位：十億」→ multiplier = "Billions"
         - 輸出的 multiplier 必須使用英文標準格式（Thousands / Millions / Billions），不得包含中文單位（如「萬元」、「百萬元」等）。
-        - 依據文本標註的貨幣（人民幣／CNY／USD／GBP／EUR 等）輸出 currency，並使用標準三位字母代碼。
+        - 依據文本標註的貨幣（人民幣／CNY／USD／GBP／EUR/HKD 等）輸出 currency，並使用標準三位字母代碼。
 
         輸出要求：
         請嚴格返回以下 JSON 結構：
@@ -1138,7 +1126,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         "total assets", "current assets", "non-current assets", "property plant equipment",
         "total liabilities", "current liabilities", "non-current liabilities",
         "total equity", "shareholders equity", "stockholders equity", 
-        "retained earnings", "share capital", "paid-in capital"
+        "retained earnings", "share capital"
     ]
     
     search_queries_ZH_SIM = [
@@ -1265,7 +1253,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
             "prepaid_expenses": "numeric value or N/A"
         }},
         "multiplier": "copied directly from the table header: / Thousands / Ten-Thousands / Millions / Billions",
-        "currency": "copied directly from the table header: CNY / USD / GBP / EUR, etc."
+        "currency": "copied directly from the table header: CNY / USD / GBP / MYR, etc."
         }}
 
         BALANCE SHEET TEXT:
@@ -1586,7 +1574,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - Do NOT round, infer, or rescale.
         - Use "N/A" if a field is missing.
         - Determine "multiplier" (Thousands / Millions / Billions) from header context like "in millions".
-        - Determine "currency" from symbols or text (e.g., GBP, USD, CNY).
+        - Determine "currency" from symbols or text (e.g., GBP, USD, CNY, IDR, MYR).
         - Do not include totals or subtotals beyond the above items.
         - Use the CONSOLIDATED cash flow statement only.
 
@@ -1615,7 +1603,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
                 "dividends": "numeric or N/A"
             }},
             "multiplier": "Thousands / Millions / Billions",
-            "currency": "USD / GBP / EUR / CNY, etc."
+            "currency": "USD / GBP / EUR / CNY / IDR / MYR, etc."
         }}
 
         CASH FLOW STATEMENT TEXT:
@@ -1785,34 +1773,81 @@ def extract_s2_4(report):
     km = report.key_financial_metrics
 
     def to_float(x):
-        """Convert string like '(123,456.7)' → -123456.7 or return None."""
-        if x in [None, "N/A", "", "-", "--"]:
+        """
+        Parse numbers with:
+        - parentheses for negatives
+        - currency symbols
+        - 'k' suffix (thousands)
+        - European or US thousands/decimal separators (e.g., '17.102.428', '36,072.95', '1.234.567,89')
+        Returns None if not parseable.
+        """
+        if x in (None, "N/A", "", "-", "--"):
             return None
+        s = str(x).strip()
+
+        # Strip currency symbols & spaces
+        if s and s[0] in ("£", "$", "€", "¥"):
+            s = s[1:].strip()
+        s = s.replace("\xa0", "").replace(" ", "")
+
+        # Handle parentheses negatives
+        neg = s.startswith("(") and s.endswith(")")
+        if neg:
+            s = s[1:-1].strip()
+
+        # Handle 'k' suffix (thousands)
+        mult = 1_000 if s.lower().endswith("k") else 1
+        if mult != 1:
+            s = s[:-1].strip()
+
+        # Detect separators
+        has_dot = "." in s
+        has_comma = "," in s
+
         try:
-            s = str(x).replace(",", "").strip()
-            if s.startswith("(") and s.endswith(")"):
-                s = "-" + s[1:-1]
-            return float(s)
+            if has_dot and has_comma:
+                # Decide decimal sep by the rightmost sep
+                last_dot = s.rfind(".")
+                last_comma = s.rfind(",")
+                if last_dot > last_comma:
+                    # '.' is decimal; remove commas
+                    s = s.replace(",", "")
+                else:
+                    # ',' is decimal; remove dots, then make ',' -> '.'
+                    s = s.replace(".", "").replace(",", ".")
+            elif has_dot and s.count(".") > 1:
+                # Multi-dot grouping -> remove all dots
+                s = s.replace(".", "")
+            elif has_comma and s.count(",") > 1:
+                # Multi-comma grouping -> remove all commas
+                s = s.replace(",", "")
+            else:
+                # Single separator (either '.' or ','), assume decimal
+                s = s.replace(",", ".")
+            val = float(s) * mult
+            return -val if neg else val
         except Exception:
             return None
 
     def safe_div(a, b):
-        """Safely divide two numbers, return None if invalid."""
+        """Safely divide two numbers; return None if a or b is None or b == 0."""
+        if a is None or b is None or b == 0:
+            return None
         try:
-            if a is None or b is None or b == 0:
-                return None
             return a / b
         except Exception:
             return None
 
     def pct(v):
-        """Convert ratio to percentage string."""
+        """Convert ratio to percentage string, using parentheses for negatives."""
         if v is None:
             return "N/A"
-        return f"{abs(v) * 100:.2f}%"
+        if v < 0:
+            return f"({abs(v * 100):.2f}%)"
+        return f"{v * 100:.2f}%"
 
     def avg(a, b):
-        """Compute average of two numbers if both exist."""
+        """Average only if both are present."""
         if a is None or b is None:
             return None
         return (a + b) / 2
@@ -1843,11 +1878,11 @@ def extract_s2_4(report):
         avg_equity = avg(equity, equity_next)
 
         # --- Calculate metrics ---
-        gross_margin = pct(safe_div((rev - cogs) if (rev and cogs) else None, rev))
+        gross_margin = pct(safe_div((rev - cogs) if (rev is not None and cogs is not None) else None, rev))
         op_margin = pct(safe_div(op_inc, rev))
         net_margin = pct(safe_div(net_inc, rev))
         curr_ratio = pct(safe_div(curr_assets, curr_liab))
-        quick_ratio = pct(safe_div((curr_assets - invent - prepaid) if all(v is not None for v in [curr_assets, invent, prepaid]) else None, curr_liab))
+        quick_ratio = pct(safe_div((curr_assets - invent - prepaid) if (curr_assets is not None and invent is not None and prepaid is not None) else None, curr_liab))
         int_coverage = pct(safe_div(op_inc, interest))
         asset_turnover = pct(safe_div(rev, avg_assets))
         debt_to_equity = pct(safe_div(total_liab, equity))
@@ -2485,8 +2520,8 @@ def build_prompt_for_year(year: int, financial_context: str):
         【硬性规则】
         - 语言：只用简体中文；JSON 的**键名必须严格使用给定英文键**，字符串值必须是简体中文。
         - 数据来源：**仅**可使用 FINANCIAL DATA 中出现的内容；禁止使用外部资料或常识补充。
+        - 你可以进行基本的财务计算（如同比增长率、利润率变化、比率分析等）来提供深入见解。
         - 交叉年份引用：以 {year} 为“主年度”。你可以**引用 FINANCIAL DATA 中出现的其他年度的数值**来进行**方向性/幅度**描述（如“高于/低于”“改善/恶化”“占比更大/更小”）或**逐字引用**已给出的同比/环比/百分比/比率。  
-        **禁止**自行计算或推导**新的**同比、环比、平均值、比率或任何未明示的数值。
         - 单位与倍率：严格按 FINANCIAL DATA 给定的**币种与倍率**书写（例如“USD，Millions”）；**不要**做任何单位换算或格式变换。
         - 缺失处理：若信息在 FINANCIAL DATA 中**不存在或无法直接得出**，对应内容写 **"N/A"**（全大写），不要猜测。
         - 输出格式：**只输出一个 JSON 对象**；不得添加多余文字、说明或键；**键名必须与下方结构完全一致**。
@@ -2522,8 +2557,8 @@ def build_prompt_for_year(year: int, financial_context: str):
         【硬性規則】
         - 語言：僅用繁體中文；JSON 的**鍵名必須嚴格使用給定英文鍵**，所有**字串值皆為繁體中文**。
         - 資料來源：**只**能引用 FINANCIAL DATA 中出現的內容；禁止使用外部資訊或常識補充。
+        - 你可以進行基本的財務計算（如同比成長率、利潤率變化、比率分析等）來提供深入見解。
         - 跨年度引用：以 {year} 為「主年度」。你可以**引用 FINANCIAL DATA 中出現的其他年度數值**進行**方向性／幅度**描述（如「高於／低於」「改善／惡化」「占比更大／更小」）或**逐字引用**既有的同比／環比／百分比／比率。  
-        **禁止**自行計算或推導**新的**同比、環比、平均值、比率或任何未明示的數字。
         - 幣別與倍率：嚴格依 FINANCIAL DATA 給定的**幣別與倍率**書寫（例：「USD, Millions」）；**不得**做任何單位換算或格式變更。
         - 缺失處理：若資訊在 FINANCIAL DATA 中**不存在或無法直接得出**，請填 **"N/A"**（全大寫），不得臆測。
         - 輸出格式：**只輸出一個 JSON 物件**；不得增刪鍵或添加說明文字；**鍵名必須與下列結構完全一致**。
@@ -2568,6 +2603,7 @@ def extract_s3_2(report, model: str = "gpt-4.1-mini"):
         try:
             response = client.chat.completions.create(
                 model=model,
+                response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": "You are an expert senior financial analyst. Analyze only the provided data and provide comprehensive, insightful business interpretations. Return valid JSON only."},
                     {"role": "user", "content": prompt}
@@ -2579,7 +2615,7 @@ def extract_s3_2(report, model: str = "gpt-4.1-mini"):
             result = _safe_json_from_llm(response.choices[0].message.content)
             # print(f"DEBUG - S3.2 Financial Performance Summary result: {result}")
             results.update(result)
-            
+            print(f"Raw response for {year}:\n{response.choices[0].message.content}\n")
         except Exception as e:
             print(f"Error in extract_s3_2: {e}")
     
@@ -4043,7 +4079,7 @@ def _extract_innovation_development_single_year(context: str, year: str, model: 
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=2000
+            max_tokens=1200
         )
         # print(response.choices[0].message.content)
         result = _safe_json_from_llm(response.choices[0].message.content)
@@ -4223,7 +4259,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
     
     # Use FAISS search for balance sheet
-    balance_data = extract_s2_2(md_file_2024, md_file_2023, top_k=15, model="gpt-4.1-mini")
+    balance_data = extract_s2_2(md_file_2024, md_file_2023, top_k=12, model="gpt-4.1-mini")
 
     # Define all expected balance sheet fields
     fields = [
@@ -4448,7 +4484,6 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
 
     # Extract financial performance summary based on Section 2 data
     financial_performance_summary = extract_s3_2(report, model="gpt-4.1-mini")
-    # print("S3.2:", json.dumps(s3_2, indent=2, ensure_ascii=False))
 
     # Save to report structure
     fps = report.financial_performance_summary

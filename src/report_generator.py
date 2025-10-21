@@ -419,15 +419,15 @@ class DDRGenerator:
 ## S2.4: Key Financial Metrics
 
 |       | 2024 | 2023 | 2022 |
-| :---- | :---- | :---- | :---- | :---- | :---- |
+| :---- | :---- | :---- | :---- |
 | Gross Margin | {self.format_financial_value(kfm.gross_margin.year_2024)} | {self.format_financial_value(kfm.gross_margin.year_2023)} | {self.format_financial_value(kfm.gross_margin.year_2022)} |
 | Operating Margin | {self.format_financial_value(kfm.operating_margin.year_2024)} | {self.format_financial_value(kfm.operating_margin.year_2023)} | {self.format_financial_value(kfm.operating_margin.year_2022)} |
 | Net Profit Margin | {self.format_financial_value(kfm.net_profit_margin.year_2024)} | {self.format_financial_value(kfm.net_profit_margin.year_2023)} | {self.format_financial_value(kfm.net_profit_margin.year_2022)} |
 | Current Ratio | {self.format_financial_value(kfm.current_ratio.year_2024)} | {self.format_financial_value(kfm.current_ratio.year_2023)} | {self.format_financial_value(kfm.current_ratio.year_2022)} |
 | Quick Ratio | {self.format_financial_value(kfm.quick_ratio.year_2024)} | {self.format_financial_value(kfm.quick_ratio.year_2023)} | {self.format_financial_value(kfm.quick_ratio.year_2022)} |
+| Debt-to-Equity | {self.format_financial_value(kfm.debt_to_equity.year_2024)} | {self.format_financial_value(kfm.debt_to_equity.year_2023)} | {self.format_financial_value(kfm.debt_to_equity.year_2022)} |
 | Interest Coverage | {self.format_financial_value(kfm.interest_coverage.year_2024)} | {self.format_financial_value(kfm.interest_coverage.year_2023)} | {self.format_financial_value(kfm.interest_coverage.year_2022)} |
 | Asset Turnover | {self.format_financial_value(kfm.asset_turnover.year_2024)} | {self.format_financial_value(kfm.asset_turnover.year_2023)} | {self.format_financial_value(kfm.asset_turnover.year_2022)} |
-| Debt-to-Equity | {self.format_financial_value(kfm.debt_to_equity.year_2024)} | {self.format_financial_value(kfm.debt_to_equity.year_2023)} | {self.format_financial_value(kfm.debt_to_equity.year_2022)} |
 | Return on Equity | {self.format_financial_value(kfm.return_on_equity.year_2024)} | {self.format_financial_value(kfm.return_on_equity.year_2023)} | {self.format_financial_value(kfm.return_on_equity.year_2022)} |
 | Return on Assets | {self.format_financial_value(kfm.return_on_assets.year_2024)} | {self.format_financial_value(kfm.return_on_assets.year_2023)} | {self.format_financial_value(kfm.return_on_assets.year_2022)} |
 | Effective Tax Rate | {self.format_financial_value(kfm.effective_tax_rate.year_2024)} | {self.format_financial_value(kfm.effective_tax_rate.year_2023)} | {self.format_financial_value(kfm.effective_tax_rate.year_2022)} | 

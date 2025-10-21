@@ -350,85 +350,85 @@ def append_next_sections(md_file: str, current_section_id: str, num_next: int = 
 
     
     
-# if __name__ == "__main__":
-#     import sys
-#     from pathlib import Path
-
-#     parsed_dir = Path("data/parsed")
-#     sections_dir = Path("data/sections_report")
-#     embeddings_dir = Path("data/embeddings")
-#     embeddings_dir.mkdir(parents=True, exist_ok=True)
-
-#     md_files = sorted(parsed_dir.glob("*_raw_parsed.md"))
-#     if not md_files:
-#         print(f"❌ No markdown files found in {parsed_dir}")
-#         sys.exit(1)
-
-#     print(f"📄 Found {len(md_files)} markdown files for embedding.\n")
-
-#     for md_path in md_files:
-#         base_name = md_path.stem
-#         jsonl_path = sections_dir / f"{base_name}.jsonl"
-#         faiss_path = embeddings_dir / f"{base_name}.faiss"
-#         npz_path = embeddings_dir / f"{base_name}.npz"
-
-#         if not jsonl_path.exists():
-#             print(f"⚠️  Skipping {md_path.name} — JSONL missing: {jsonl_path}")
-#             continue
-
-#         if faiss_path.exists() and npz_path.exists():
-#             print(f"✅ Skipping {base_name} (embeddings already exist)\n")
-#             continue
-
-#         # Print both absolute paths clearly
-#         print(f"\n🚀 Building embeddings for {base_name} ...")
-#         print(f"   📘 Markdown: {md_path.resolve()}")
-#         print(f"   📄 JSONL:    {jsonl_path.resolve()}")
-
-#         try:
-#             build_section_embeddings(str(jsonl_path), str(md_path))
-#             print(f"✅ Completed {base_name}\n")
-#         except Exception as e:
-#             print(f"❌ Error processing {base_name}: {e}\n")
-
-#     print("🎉 All embeddings finished successfully!")
-
-    
-    
 if __name__ == "__main__":
-    # Build embeddings and save to data/embeddings/ folder
-    build_section_embeddings("data/sections_report/nvidia_2023_raw_parsed.jsonl", "data/parsed/nvidia_2023_raw_parsed.md")
+    import sys
+    from pathlib import Path
 
-    # Test search functionality
-    print("\n" + "="*50)
-    print("TESTING SEARCH FUNCTIONALITY")
-    print("="*50)
+    parsed_dir = Path("data/parsed")
+    sections_dir = Path("data/sections_report")
+    embeddings_dir = Path("data/embeddings")
+    embeddings_dir.mkdir(parents=True, exist_ok=True)
 
-    meta = np.load("data/embeddings/nvidia_2023_raw_parsed.npz", allow_pickle=True)
-    # meta = np.load("data/embeddings/catl_2024_raw_parsed.npz", allow_pickle=True)
-    metadata = meta["metadata"]
+    md_files = sorted(parsed_dir.glob("*_raw_parsed.md"))
+    if not md_files:
+        print(f"❌ No markdown files found in {parsed_dir}")
+        sys.exit(1)
+
+    print(f"📄 Found {len(md_files)} markdown files for embedding.\n")
+
+    for md_path in md_files:
+        base_name = md_path.stem
+        jsonl_path = sections_dir / f"{base_name}.jsonl"
+        faiss_path = embeddings_dir / f"{base_name}.faiss"
+        npz_path = embeddings_dir / f"{base_name}.npz"
+
+        if not jsonl_path.exists():
+            print(f"⚠️  Skipping {md_path.name} — JSONL missing: {jsonl_path}")
+            continue
+
+        if faiss_path.exists() and npz_path.exists():
+            print(f"✅ Skipping {base_name} (embeddings already exist)\n")
+            continue
+
+        # Print both absolute paths clearly
+        print(f"\n🚀 Building embeddings for {base_name} ...")
+        print(f"   📘 Markdown: {md_path.resolve()}")
+        print(f"   📄 JSONL:    {jsonl_path.resolve()}")
+
+        try:
+            build_section_embeddings(str(jsonl_path), str(md_path))
+            print(f"✅ Completed {base_name}\n")
+        except Exception as e:
+            print(f"❌ Error processing {base_name}: {e}\n")
+
+    print("🎉 All embeddings finished successfully!")
+
     
-    search_queries = [
-            "core values",
-            "mission statement", "company mission statement", "our mission", "mission",
-            "vision statement", "company vision statement", "our vision", "vision future",
-            "innovation mission vision values", "integrity", "collaboration", "diversity inclusion",
-            "core values principles", "corporate values", "company values beliefs"
-    ]
-
-    with open("data/parsed/nvidia_2023_raw_parsed.md", "r", encoding="utf-8") as f:
-        markdown_text = f.read()
     
-    combined_text = retrieve_relevant_text(search_queries, top_k=20, md_file="nvidia_2023_raw_parsed")
-    print(combined_text)
+# if __name__ == "__main__":
+#     # Build embeddings and save to data/embeddings/ folder
+#     build_section_embeddings("data/sections_report/nvidia_2023_raw_parsed.jsonl", "data/parsed/nvidia_2023_raw_parsed.md")
 
-    for query in search_queries:
-        print(f"\nQuery: '{query}'")
-        print("-" * 40)
-        results = search_sections(query, top_k=5, md_file="nvidia_2023_raw_parsed")
-        for result in results:
-            print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
-            print(f"   Section ID: {result['section_id']}")
-            print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
-            print(f"   Chars: {result['char_count']:,}")
-            # print(f"   Original text:\n {get_text_from_lines(markdown_text, result['lines'][0], result['lines'][1])}")
+#     # Test search functionality
+#     print("\n" + "="*50)
+#     print("TESTING SEARCH FUNCTIONALITY")
+#     print("="*50)
+
+#     meta = np.load("data/embeddings/nvidia_2023_raw_parsed.npz", allow_pickle=True)
+#     # meta = np.load("data/embeddings/catl_2024_raw_parsed.npz", allow_pickle=True)
+#     metadata = meta["metadata"]
+    
+#     search_queries = [
+#             "core values",
+#             "mission statement", "company mission statement", "our mission", "mission",
+#             "vision statement", "company vision statement", "our vision", "vision future",
+#             "innovation mission vision values", "integrity", "collaboration", "diversity inclusion",
+#             "core values principles", "corporate values", "company values beliefs"
+#     ]
+
+#     with open("data/parsed/nvidia_2023_raw_parsed.md", "r", encoding="utf-8") as f:
+#         markdown_text = f.read()
+    
+#     combined_text = retrieve_relevant_text(search_queries, top_k=20, md_file="nvidia_2023_raw_parsed")
+#     print(combined_text)
+
+#     for query in search_queries:
+#         print(f"\nQuery: '{query}'")
+#         print("-" * 40)
+#         results = search_sections(query, top_k=5, md_file="nvidia_2023_raw_parsed")
+#         for result in results:
+#             print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
+#             print(f"   Section ID: {result['section_id']}")
+#             print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
+#             print(f"   Chars: {result['char_count']:,}")
+#             # print(f"   Original text:\n {get_text_from_lines(markdown_text, result['lines'][0], result['lines'][1])}")

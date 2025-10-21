@@ -176,7 +176,7 @@ def normalize_and_segment_markdown(markdown_text, doc_filename):
 
     # Close final section
     if current_section is not None:
-        current_section['end_line'] = len(lines) - 1
+        current_section['end_line'] = len(lines)
         current_section['content'] = '\n'.join(lines[section_start_line:])
         current_section['tables'] = extract_tables_from_lines(
             lines, section_start_line, len(lines)

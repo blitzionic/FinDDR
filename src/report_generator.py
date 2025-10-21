@@ -5,6 +5,7 @@ with sections for company overview, financial performance, business analysis, ri
 and future outlook. 
 """
 
+from cProfile import label
 import json
 import os
 from textwrap import dedent
@@ -338,6 +339,21 @@ class DDRGenerator:
         return dedent(md).strip() + "\n"
 
     # ------------------ Section 2 ------------------
+    def _currency_if_available(self, values: list[str], default_currency: str, default_multiplier: str):
+        """Return currency and multiplier only if at least one value exists (not 'N/A')."""
+        if all(v in ("N/A", None, "") for v in values):
+            return "N/A", "N/A"
+        return default_currency, default_multiplier
+
+    def make_row(self, label, obj, multiplier, currency):
+        vals = [
+            self.format_financial_value(getattr(obj, "year_2024", "N/A")),
+            self.format_financial_value(getattr(obj, "year_2023", "N/A")),
+            self.format_financial_value(getattr(obj, "year_2022", "N/A")),
+        ]
+        cur, mult = self._currency_if_available(vals, currency, multiplier)
+        return f"| {label} | {vals[0]} | {vals[1]} | {vals[2]} | {mult} | {cur} |"
+
     def generate_section_2(self) -> str:
         """Generate Section 2: Financial Performance"""
         inc = self.report.income_statement
@@ -361,61 +377,61 @@ class DDRGenerator:
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Revenue | {self.format_financial_value(inc.revenue.year_2024)} | {self.format_financial_value(inc.revenue.year_2023)} | {self.format_financial_value(inc.revenue.year_2022)} | {income_multiplier} | {income_currency} |
-| Cost of Goods Sold | {self.format_financial_value(inc.cost_of_goods_sold.year_2024)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2023)} | {self.format_financial_value(inc.cost_of_goods_sold.year_2022)} | {income_multiplier} | {income_currency} |
-| Gross Profit | {self.format_financial_value(inc.gross_profit.year_2024)} | {self.format_financial_value(inc.gross_profit.year_2023)} | {self.format_financial_value(inc.gross_profit.year_2022)} | {income_multiplier} | {income_currency} |
-| Operating Expense | {self.format_financial_value(inc.operating_expense.year_2024)} | {self.format_financial_value(inc.operating_expense.year_2023)} | {self.format_financial_value(inc.operating_expense.year_2022)} | {income_multiplier} | {income_currency} |
-| Operating Income | {self.format_financial_value(inc.operating_income.year_2024)} | {self.format_financial_value(inc.operating_income.year_2023)} | {self.format_financial_value(inc.operating_income.year_2022)} | {income_multiplier} | {income_currency} |
-| Net Profit | {self.format_financial_value(inc.net_profit.year_2024)} | {self.format_financial_value(inc.net_profit.year_2023)} | {self.format_financial_value(inc.net_profit.year_2022)} | {income_multiplier} | {income_currency} |
-| Income before income taxes | {self.format_financial_value(inc.income_before_income_taxes.year_2024)} | {self.format_financial_value(inc.income_before_income_taxes.year_2023)} | {self.format_financial_value(inc.income_before_income_taxes.year_2022)} | {income_multiplier} | {income_currency} |
-| Income tax expense(benefit) | {self.format_financial_value(inc.income_tax_expense.year_2024)} | {self.format_financial_value(inc.income_tax_expense.year_2023)} | {self.format_financial_value(inc.income_tax_expense.year_2022)} | {income_multiplier} | {income_currency} |
-| Interest Expense | {self.format_financial_value(inc.interest_expense.year_2024)} | {self.format_financial_value(inc.interest_expense.year_2023)} | {self.format_financial_value(inc.interest_expense.year_2022)} | {income_multiplier} | {income_currency} |
+{self.make_row("Revenue", inc.revenue, income_multiplier, income_currency)}
+{self.make_row("Cost of Goods Sold", inc.cost_of_goods_sold, income_multiplier, income_currency)}
+{self.make_row("Gross Profit", inc.gross_profit, income_multiplier, income_currency)}
+{self.make_row("Operating Expense", inc.operating_expense, income_multiplier, income_currency)}
+{self.make_row("Operating Income", inc.operating_income, income_multiplier, income_currency)}
+{self.make_row("Net Profit", inc.net_profit, income_multiplier, income_currency)}
+{self.make_row("Income before income taxes", inc.income_before_income_taxes, income_multiplier, income_currency)}
+{self.make_row("Income tax expense(benefit)", inc.income_tax_expense, income_multiplier, income_currency)}
+{self.make_row("Interest Expense", inc.interest_expense, income_multiplier, income_currency)}
 
 
 ## S2.2: Balance Sheet
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Total Assets | {self.format_financial_value(bal.total_assets.year_2024)} | {self.format_financial_value(bal.total_assets.year_2023)} | {self.format_financial_value(bal.total_assets.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Current Assets | {self.format_financial_value(bal.current_assets.year_2024)} | {self.format_financial_value(bal.current_assets.year_2023)} | {self.format_financial_value(bal.current_assets.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Non-Current Assets | {self.format_financial_value(bal.non_current_assets.year_2024)} | {self.format_financial_value(bal.non_current_assets.year_2023)} | {self.format_financial_value(bal.non_current_assets.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Total Liabilities | {self.format_financial_value(bal.total_liabilities.year_2024)} | {self.format_financial_value(bal.total_liabilities.year_2023)} | {self.format_financial_value(bal.total_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Current Liabilities | {self.format_financial_value(bal.current_liabilities.year_2024)} | {self.format_financial_value(bal.current_liabilities.year_2023)} | {self.format_financial_value(bal.current_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Non-Current Liabilities | {self.format_financial_value(bal.non_current_liabilities.year_2024)} | {self.format_financial_value(bal.non_current_liabilities.year_2023)} | {self.format_financial_value(bal.non_current_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Shareholders' Equity | {self.format_financial_value(bal.shareholders_equity.year_2024)} | {self.format_financial_value(bal.shareholders_equity.year_2023)} | {self.format_financial_value(bal.shareholders_equity.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Retained Earnings | {self.format_financial_value(bal.retained_earnings.year_2024)} | {self.format_financial_value(bal.retained_earnings.year_2023)} | {self.format_financial_value(bal.retained_earnings.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Total Equity and Liabilities | {self.format_financial_value(bal.total_equity_and_liabilities.year_2024)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2023)} | {self.format_financial_value(bal.total_equity_and_liabilities.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Inventories | {self.format_financial_value(bal.inventories.year_2024)} | {self.format_financial_value(bal.inventories.year_2023)} | {self.format_financial_value(bal.inventories.year_2022)} | {balance_multiplier} | {balance_currency} |
-| Prepaid Expenses | {self.format_financial_value(bal.prepaid_expenses.year_2024)} | {self.format_financial_value(bal.prepaid_expenses.year_2023)} | {self.format_financial_value(bal.prepaid_expenses.year_2022)} | {balance_multiplier} | {balance_currency} |
+{self.make_row("Total Assets", bal.total_assets, balance_multiplier, balance_currency)}
+{self.make_row("Current Assets", bal.current_assets, balance_multiplier, balance_currency)}
+{self.make_row("Non-Current Assets", bal.non_current_assets, balance_multiplier, balance_currency)}
+{self.make_row("Total Liabilities", bal.total_liabilities, balance_multiplier, balance_currency)}
+{self.make_row("Current Liabilities", bal.current_liabilities, balance_multiplier, balance_currency)}
+{self.make_row("Non-Current Liabilities", bal.non_current_liabilities, balance_multiplier, balance_currency)}
+{self.make_row("Shareholders' Equity", bal.shareholders_equity, balance_multiplier, balance_currency)}
+{self.make_row("Retained Earnings", bal.retained_earnings, balance_multiplier, balance_currency)}
+{self.make_row("Total Equity and Liabilities", bal.total_equity_and_liabilities, balance_multiplier, balance_currency)}
+{self.make_row("Inventories", bal.inventories, balance_multiplier, balance_currency)}
+{self.make_row("Prepaid Expenses", bal.prepaid_expenses, balance_multiplier, balance_currency)}
 
 
 ## S2.3: Cash Flow Statement
 
 | Field | 2024 | 2023 | 2022 | Multiplier | Currency |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Net Cash Flow from Operations | {self.format_financial_value(cf.net_cash_from_operations.year_2024)} | {self.format_financial_value(cf.net_cash_from_operations.year_2023)} | {self.format_financial_value(cf.net_cash_from_operations.year_2022)} | {cash_multiplier} | {cash_currency} |
-| Net Cash Flow from Investing | {self.format_financial_value(cf.net_cash_from_investing.year_2024)} | {self.format_financial_value(cf.net_cash_from_investing.year_2023)} | {self.format_financial_value(cf.net_cash_from_investing.year_2022)} | {cash_multiplier} | {cash_currency} |
-| Net Cash Flow from Financing | {self.format_financial_value(cf.net_cash_from_financing.year_2024)} | {self.format_financial_value(cf.net_cash_from_financing.year_2023)} | {self.format_financial_value(cf.net_cash_from_financing.year_2022)} | {cash_multiplier} | {cash_currency} |
-| Net Increase/Decrease in Cash | {self.format_financial_value(cf.net_increase_decrease_cash.year_2024)} | {self.format_financial_value(cf.net_increase_decrease_cash.year_2023)} | {self.format_financial_value(cf.net_increase_decrease_cash.year_2022)} | {cash_multiplier} | {cash_currency} |
-| Dividends | {self.format_financial_value(cf.dividends.year_2024)} | {self.format_financial_value(cf.dividends.year_2023)} | {self.format_financial_value(cf.dividends.year_2022)} | {cash_multiplier} | {cash_currency} |
+{self.make_row("Net Cash Flow from Operations", cf.net_cash_from_operations, cash_multiplier, cash_currency)}
+{self.make_row("Net Cash Flow from Investing", cf.net_cash_from_investing, cash_multiplier, cash_currency)}
+{self.make_row("Net Cash Flow from Financing", cf.net_cash_from_financing, cash_multiplier, cash_currency)}
+{self.make_row("Net Increase/Decrease in Cash", cf.net_increase_decrease_cash, cash_multiplier, cash_currency)}
+{self.make_row("Dividends", cf.dividends, cash_multiplier, cash_currency)}
 
 
 ## S2.4: Key Financial Metrics
 
-| Field | 2024 | 2023 | 2022 | Multiplier | Currency |
+|       | 2024 | 2023 | 2022 |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Gross Margin | {self.format_financial_value(kfm.gross_margin.year_2024)} | {self.format_financial_value(kfm.gross_margin.year_2023)} | {self.format_financial_value(kfm.gross_margin.year_2022)} | {income_multiplier} | {income_currency} |
-| Operating Margin | {self.format_financial_value(kfm.operating_margin.year_2024)} | {self.format_financial_value(kfm.operating_margin.year_2023)} | {self.format_financial_value(kfm.operating_margin.year_2022)} | {income_multiplier} | {income_currency} |
-| Net Profit Margin | {self.format_financial_value(kfm.net_profit_margin.year_2024)} | {self.format_financial_value(kfm.net_profit_margin.year_2023)} | {self.format_financial_value(kfm.net_profit_margin.year_2022)} | {income_multiplier} | {income_currency} |
-| Current Ratio | {self.format_financial_value(kfm.current_ratio.year_2024)} | {self.format_financial_value(kfm.current_ratio.year_2023)} | {self.format_financial_value(kfm.current_ratio.year_2022)} | {income_multiplier} | {income_currency} |
-| Quick Ratio | {self.format_financial_value(kfm.quick_ratio.year_2024)} | {self.format_financial_value(kfm.quick_ratio.year_2023)} | {self.format_financial_value(kfm.quick_ratio.year_2022)} | {income_multiplier} | {income_currency} |
-| Interest Coverage | {self.format_financial_value(kfm.interest_coverage.year_2024)} | {self.format_financial_value(kfm.interest_coverage.year_2023)} | {self.format_financial_value(kfm.interest_coverage.year_2022)} | {income_multiplier} | {income_currency} |
-| Asset Turnover | {self.format_financial_value(kfm.asset_turnover.year_2024)} | {self.format_financial_value(kfm.asset_turnover.year_2023)} | {self.format_financial_value(kfm.asset_turnover.year_2022)} | {income_multiplier} | {income_currency} |
-| Debt-to-Equity | {self.format_financial_value(kfm.debt_to_equity.year_2024)} | {self.format_financial_value(kfm.debt_to_equity.year_2023)} | {self.format_financial_value(kfm.debt_to_equity.year_2022)} | {income_multiplier} | {income_currency} |
-| Return on Equity | {self.format_financial_value(kfm.return_on_equity.year_2024)} | {self.format_financial_value(kfm.return_on_equity.year_2023)} | {self.format_financial_value(kfm.return_on_equity.year_2022)} | {income_multiplier} | {income_currency} |
-| Return on Assets | {self.format_financial_value(kfm.return_on_assets.year_2024)} | {self.format_financial_value(kfm.return_on_assets.year_2023)} | {self.format_financial_value(kfm.return_on_assets.year_2022)} | {income_multiplier} | {income_currency} |
-| Effective Tax Rate | {self.format_financial_value(kfm.effective_tax_rate.year_2024)} | {self.format_financial_value(kfm.effective_tax_rate.year_2023)} | {self.format_financial_value(kfm.effective_tax_rate.year_2022)} | {income_multiplier} | {income_currency} |
-| Dividend Payout Ratio | {self.format_financial_value(kfm.dividend_payout_ratio.year_2024)} | {self.format_financial_value(kfm.dividend_payout_ratio.year_2023)} | {self.format_financial_value(kfm.dividend_payout_ratio.year_2022)} | {income_multiplier} | {income_currency} |
+| Gross Margin | {self.format_financial_value(kfm.gross_margin.year_2024)} | {self.format_financial_value(kfm.gross_margin.year_2023)} | {self.format_financial_value(kfm.gross_margin.year_2022)} |
+| Operating Margin | {self.format_financial_value(kfm.operating_margin.year_2024)} | {self.format_financial_value(kfm.operating_margin.year_2023)} | {self.format_financial_value(kfm.operating_margin.year_2022)} |
+| Net Profit Margin | {self.format_financial_value(kfm.net_profit_margin.year_2024)} | {self.format_financial_value(kfm.net_profit_margin.year_2023)} | {self.format_financial_value(kfm.net_profit_margin.year_2022)} |
+| Current Ratio | {self.format_financial_value(kfm.current_ratio.year_2024)} | {self.format_financial_value(kfm.current_ratio.year_2023)} | {self.format_financial_value(kfm.current_ratio.year_2022)} |
+| Quick Ratio | {self.format_financial_value(kfm.quick_ratio.year_2024)} | {self.format_financial_value(kfm.quick_ratio.year_2023)} | {self.format_financial_value(kfm.quick_ratio.year_2022)} |
+| Interest Coverage | {self.format_financial_value(kfm.interest_coverage.year_2024)} | {self.format_financial_value(kfm.interest_coverage.year_2023)} | {self.format_financial_value(kfm.interest_coverage.year_2022)} |
+| Asset Turnover | {self.format_financial_value(kfm.asset_turnover.year_2024)} | {self.format_financial_value(kfm.asset_turnover.year_2023)} | {self.format_financial_value(kfm.asset_turnover.year_2022)} |
+| Debt-to-Equity | {self.format_financial_value(kfm.debt_to_equity.year_2024)} | {self.format_financial_value(kfm.debt_to_equity.year_2023)} | {self.format_financial_value(kfm.debt_to_equity.year_2022)} |
+| Return on Equity | {self.format_financial_value(kfm.return_on_equity.year_2024)} | {self.format_financial_value(kfm.return_on_equity.year_2023)} | {self.format_financial_value(kfm.return_on_equity.year_2022)} |
+| Return on Assets | {self.format_financial_value(kfm.return_on_assets.year_2024)} | {self.format_financial_value(kfm.return_on_assets.year_2023)} | {self.format_financial_value(kfm.return_on_assets.year_2022)} |
+| Effective Tax Rate | {self.format_financial_value(kfm.effective_tax_rate.year_2024)} | {self.format_financial_value(kfm.effective_tax_rate.year_2023)} | {self.format_financial_value(kfm.effective_tax_rate.year_2022)} | 
+| Dividend Payout Ratio | {self.format_financial_value(kfm.dividend_payout_ratio.year_2024)} | {self.format_financial_value(kfm.dividend_payout_ratio.year_2023)} | {self.format_financial_value(kfm.dividend_payout_ratio.year_2022)} |
 
 ## S2.5: Operating Performance
 

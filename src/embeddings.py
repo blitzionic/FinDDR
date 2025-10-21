@@ -11,8 +11,62 @@ import random
 import tiktoken
 from typing import List
 
+
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def retrieve_relevant_text(search_queries: List[str], top_k: int, md_file: str) -> str:
+    """
+    Search for sections using multiple queries and return the complete combined text.
+    Handles duplicate section names by using composite keys (section_id + line_range).
+    
+    Args:
+        search_queries: List of search query strings
+        top_k: Number of top results to return per query
+        md_file: Name of the markdown file (without .md extension)
+    
+    Returns:
+        Combined text from all relevant sections
+    """
+    all_results = []
+    for query in search_queries:
+        # returns list of dict, where each item is section identifier  
+        results = search_sections(query, top_k=top_k, md_file=md_file)
+        all_results.extend(results)
+    
+    # Sort by relevance (distance score) first
+    all_results.sort(key=lambda x: x.get('distance', float('inf')))
+    
+    # De-duplicate using composite key: section_id + line_range + section_number
+    seen_sections = set()
+    unique_results = []
+    
+    for result in all_results:
+        # Create composite key to handle duplicate section names
+        start_line, end_line = result["lines"]
+        composite_key = f"{result['section_id']}_{start_line}_{end_line}_{result.get('section_number', 0)}"
+        
+        if composite_key not in seen_sections:
+            seen_sections.add(composite_key)
+            unique_results.append(result)
+  
+    print(f"Final unique results: {len(unique_results)} sections")
+    
+    # Get the actual text for selected sections
+    with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
+        markdown_text = f.read()
+    
+    lines = markdown_text.split('\n')
+    context = ""
+
+    for h in unique_results:
+        s, e = h["lines"]
+        section_text = '\n'.join(lines[s - 1:e + 1])
+        # Include section number for clarity when there are duplicate titles
+        section_identifier = f"{h.get('title')}"
+        context += f"\n--- {section_identifier} ---\n{section_text}\n\n"
+    
+    return context.strip()
 
 def get_text_from_lines(markdown_text: str, start_line: int, end_line: int) -> str:
     lines = markdown_text.splitlines()
@@ -230,71 +284,117 @@ def append_next_sections(md_file: str, current_section_id: str, num_next: int = 
 
     return combined_text
 
+    
+# if __name__ == "__main__":
+#     import argparse
+#     import sys
+#     from pathlib import Path
 
-def retrieve_relevant_text(search_queries: List[str], top_k: int, md_file: str) -> str:
-    """
-    Search for sections using multiple queries and return the complete combined text.
-    Handles duplicate section names by using composite keys (section_id + line_range).
-    
-    Args:
-        search_queries: List of search query strings
-        top_k: Number of top results to return per query
-        md_file: Name of the markdown file (without .md extension)
-    
-    Returns:
-        Combined text from all relevant sections
-    """
-    all_results = []
-    for query in search_queries:
-        results = search_sections(query, top_k=top_k, md_file=md_file)
-        all_results.extend(results)
-    
-    # Sort by relevance (distance score) first
-    all_results.sort(key=lambda x: x.get('distance', float('inf')))
-    
-    # De-duplicate using composite key: section_id + line_range + section_number
-    seen_sections = set()
-    unique_results = []
-    
-    for result in all_results:
-        # Create composite key to handle duplicate section names
-        start_line, end_line = result["lines"]
-        composite_key = f"{result['section_id']}_{start_line}_{end_line}_{result.get('section_number', 0)}"
-        
-        if composite_key not in seen_sections:
-            seen_sections.add(composite_key)
-            unique_results.append(result)
-  
-    print(f"Final unique results: {len(unique_results)} sections")
+#     parser = argparse.ArgumentParser(
+#         description="Build FAISS embeddings for a Markdown + JSONL section pair."
+#     )
 
-    # Print a human-readable summary of the extracted sections
-    if unique_results:
-        print("\nSummary of extracted sections:")
-        for i, sec in enumerate(unique_results, start=1):
-            s_ln, e_ln = sec["lines"]
-            title = sec.get("title", "Section")
-            sec_num = sec.get("section_number")
-            chars = sec.get("char_count", 0)
-            print(f"{i}. {title} (#{sec_num}) — Lines {s_ln}-{e_ln} — Chars: {chars}")
-        print("")
-    
-    # Get the actual text for selected sections
-    with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
-        markdown_text = f.read()
-    
-    lines = markdown_text.split('\n')
-    context = ""
+#     parser.add_argument(
+#         "--jsonl",
+#         type=str,
+#         required=True,
+#         help="Path to the JSONL file (from normalize_and_segment_markdown)."
+#     )
 
-    for h in unique_results:
-        s, e = h["lines"]
-        section_text = '\n'.join(lines[s - 1:e + 1])
-        # Include section number for clarity when there are duplicate titles
-        section_identifier = f"{h.get('title', 'Section')} (#{h.get('section_number')}, Lines {s}-{e})"
-        context += f"\n--- {section_identifier} ---\n{section_text}\n\n"
+#     parser.add_argument(
+#         "--md",
+#         type=str,
+#         required=True,
+#         help="Path to the Markdown file corresponding to the JSONL."
+#     )
+
+#     parser.add_argument(
+#         "--force",
+#         action="store_true",
+#         help="Force rebuild even if FAISS/NPZ already exist."
+#     )
+
+#     args = parser.parse_args()
+
+#     jsonl_file = Path(args.jsonl)
+#     md_file = Path(args.md)
+
+#     if not jsonl_file.exists():
+#         print(f"❌ JSONL file not found: {jsonl_file}")
+#         sys.exit(1)
+#     if not md_file.exists():
+#         print(f"❌ Markdown file not found: {md_file}")
+#         sys.exit(1)
+
+#     # Derive output prefix
+#     out_prefix = md_file.stem
+
+#     print(f"📘 Building embeddings for:")
+#     print(f"   JSONL: {jsonl_file}")
+#     print(f"   Markdown: {md_file}")
+#     print(f"   Output prefix: {out_prefix}")
+
+#     # If force flag provided, remove existing files
+#     faiss_path = Path(f"data/embeddings/{out_prefix}.faiss")
+#     npz_path = Path(f"data/embeddings/{out_prefix}.npz")
+#     if args.force:
+#         if faiss_path.exists():
+#             faiss_path.unlink()
+#         if npz_path.exists():
+#             npz_path.unlink()
+
+#     # Build embeddings
+#     build_section_embeddings(str(jsonl_file), str(md_file), output_prefix=out_prefix)
+
+#     print("\n✅ Embedding build completed successfully.")
+
     
-    return context.strip()
+    
+# if __name__ == "__main__":
+#     import sys
+#     from pathlib import Path
 
+#     parsed_dir = Path("data/parsed")
+#     sections_dir = Path("data/sections_report")
+#     embeddings_dir = Path("data/embeddings")
+#     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
+#     md_files = sorted(parsed_dir.glob("*_raw_parsed.md"))
+#     if not md_files:
+#         print(f"❌ No markdown files found in {parsed_dir}")
+#         sys.exit(1)
+
+#     print(f"📄 Found {len(md_files)} markdown files for embedding.\n")
+
+#     for md_path in md_files:
+#         base_name = md_path.stem
+#         jsonl_path = sections_dir / f"{base_name}.jsonl"
+#         faiss_path = embeddings_dir / f"{base_name}.faiss"
+#         npz_path = embeddings_dir / f"{base_name}.npz"
+
+#         if not jsonl_path.exists():
+#             print(f"⚠️  Skipping {md_path.name} — JSONL missing: {jsonl_path}")
+#             continue
+
+#         if faiss_path.exists() and npz_path.exists():
+#             print(f"✅ Skipping {base_name} (embeddings already exist)\n")
+#             continue
+
+#         # Print both absolute paths clearly
+#         print(f"\n🚀 Building embeddings for {base_name} ...")
+#         print(f"   📘 Markdown: {md_path.resolve()}")
+#         print(f"   📄 JSONL:    {jsonl_path.resolve()}")
+
+#         try:
+#             build_section_embeddings(str(jsonl_path), str(md_path))
+#             print(f"✅ Completed {base_name}\n")
+#         except Exception as e:
+#             print(f"❌ Error processing {base_name}: {e}\n")
+
+#     print("🎉 All embeddings finished successfully!")
+
+    
+    
 if __name__ == "__main__":
     # Build embeddings and save to data/embeddings/ folder
     build_section_embeddings("data/sections_report/nvidia_2023_raw_parsed.jsonl", "data/parsed/nvidia_2023_raw_parsed.md")
@@ -308,28 +408,27 @@ if __name__ == "__main__":
     # meta = np.load("data/embeddings/catl_2024_raw_parsed.npz", allow_pickle=True)
     metadata = meta["metadata"]
     
-    test_queries = [            
-        "balance sheet", "statement of financial position", "consolidated balance sheet",
-        "total assets", "current assets", "non-current assets", "property plant equipment",
-        "total liabilities", "current liabilities", "non-current liabilities",
-        "total equity", "shareholders equity", "stockholders equity", 
-        "retained earnings", "share capital", "paid-in capital"
+    search_queries = [
+            "core values",
+            "mission statement", "company mission statement", "our mission", "mission",
+            "vision statement", "company vision statement", "our vision", "vision future",
+            "innovation mission vision values", "integrity", "collaboration", "diversity inclusion",
+            "core values principles", "corporate values", "company values beliefs"
     ]
-        
 
     with open("data/parsed/nvidia_2023_raw_parsed.md", "r", encoding="utf-8") as f:
         markdown_text = f.read()
     
-    combined_text = retrieve_relevant_text(test_queries, top_k=5, md_file="nvidia_2023_raw_parsed")
+    combined_text = retrieve_relevant_text(search_queries, top_k=20, md_file="nvidia_2023_raw_parsed")
     print(combined_text)
 
-    # for query in test_queries:
-    #     print(f"\nQuery: '{query}'")
-    #     print("-" * 40)
-    #     results = search_sections(query, top_k=5, md_file="nvidia_2024_raw_parsed")
-    #     for result in results:
-    #         print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
-    #         print(f"   Section ID: {result['section_id']}")
-    #         print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
-    #         print(f"   Chars: {result['char_count']:,}")
-    #         print(f"   Original text:\n {get_text_from_lines(markdown_text, result['lines'][0], result['lines'][1])}")
+    for query in search_queries:
+        print(f"\nQuery: '{query}'")
+        print("-" * 40)
+        results = search_sections(query, top_k=5, md_file="nvidia_2023_raw_parsed")
+        for result in results:
+            print(f"{result['rank']}. {result['title']} (distance: {result['distance']:.3f})")
+            print(f"   Section ID: {result['section_id']}")
+            print(f"   Lines: {result['lines'][0]}-{result['lines'][1]}")
+            print(f"   Chars: {result['char_count']:,}")
+            # print(f"   Original text:\n {get_text_from_lines(markdown_text, result['lines'][0], result['lines'][1])}")

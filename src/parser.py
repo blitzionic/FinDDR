@@ -151,7 +151,7 @@ def find_markdown_files(folder_path: str) -> List[Path]:
     if not folder.exists():
         return []
     
-    md_files = list(folder.glob("*_raw_parsed.md"))
+    md_files = list(folder.glob("*_mistral.md"))
     return sorted(md_files)
 
 def process_single_markdown(md_file_path: str, force_reparse: bool = False) -> bool:
@@ -162,11 +162,11 @@ def process_single_markdown(md_file_path: str, force_reparse: bool = False) -> b
         print(f"❌ File not found: {md_file}")
         return False
     
-    if not md_file.name.endswith("_raw_parsed.md"):
-        print(f"⚠️  Warning: File doesn't match expected pattern (*_raw_parsed.md): {md_file.name}")
+    if not md_file.name.endswith("_mistral.md"):
+        print(f"⚠️  Warning: File doesn't match expected pattern (*_mistral.md): {md_file.name}")
     
     # Get base name
-    base_name = md_file.stem.replace("_raw_parsed", "")
+    base_name = md_file.stem.replace("_mistral", "")
     
     # Check if JSONL already exists
     sections_dir = Path("data/sections_report")
@@ -253,9 +253,9 @@ if __name__ == "__main__":
 
         from extraction import normalize_and_segment_markdown
 
-        md_files = list(input_path.rglob("*_raw_parsed.md"))
+        md_files = list(input_path.rglob("*_mistral.md"))
         if not md_files:
-            print(f"⚠️ No *_raw_parsed.md files found in {input_path}")
+            print(f"⚠️ No *_mistral.md files found in {input_path}")
             sys.exit(0)
 
         print(f"📁 Found {len(md_files)} markdown files to segment.")

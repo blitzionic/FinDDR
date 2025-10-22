@@ -53,7 +53,7 @@ def retrieve_relevant_text(search_queries: List[str], top_k: int, md_file: str) 
     print(f"Final unique results: {len(unique_results)} sections")
     
     # Get the actual text for selected sections
-    with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
+    with open(f"data/parsed_md_val_mistral/{md_file}.md", "r", encoding="utf-8") as f:
         markdown_text = f.read()
     
     lines = markdown_text.split('\n')
@@ -260,7 +260,7 @@ def search_sections(query: str, top_k: int = 5, md_file: str = None):
 def append_next_sections(md_file: str, current_section_id: str, num_next: int = 5) -> str:
     
     meta = np.load(f"data/embeddings/{md_file}.npz", allow_pickle=True)["metadata"]
-    with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
+    with open(f"data/parsed_md_val_mistral/{md_file}.md", "r", encoding="utf-8") as f:
         markdown_text = f.read()
 
     # Find current section index in metadata
@@ -354,12 +354,12 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
 
-    parsed_dir = Path("data/parsed")
+    parsed_dir = Path("data/parsed_md_val_mistral")
     sections_dir = Path("data/sections_report")
     embeddings_dir = Path("data/embeddings")
     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
-    md_files = sorted(parsed_dir.glob("*_raw_parsed.md"))
+    md_files = sorted(parsed_dir.glob("*_mistral.md"))
     if not md_files:
         print(f"❌ No markdown files found in {parsed_dir}")
         sys.exit(1)

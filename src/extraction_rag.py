@@ -3,10 +3,9 @@ import re
 from pathlib import Path
 import shutil
 import tempfile
-from typing import List
+from typing import List, Dict, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
-from typing import Tuple
 import numpy as np
 from tqdm import tqdm
 import time
@@ -42,13 +41,6 @@ def set_company_name(name: str):
     COMPANY_NAME = name
 
 # ============================= Helper Functions ===========================
-
-def _clip(n: int, low: int, high: int) -> int:
-    if n < low:
-        return low
-    if n > high:
-        return high
-    return n
 
 def _safe_json_from_llm(s: str) -> dict:
     if s is None:
@@ -170,42 +162,41 @@ def to_zh_currency(code: str, trad: bool = False) -> str:
     """
     if code is None:
         return "未知" if not trad else "未知"
-        code = str(code).upper().strip()
-        # Simplified / Traditional names
-        table_sim = {
-            "USD": "美元",
-            "EUR": "欧元",
-            "GBP": "英镑",
-            "JPY": "日元",
-            "CNY": "人民币",
-            "HKD": "港元",
-            "TWD": "新台币",
-            "SGD": "新元",
-            "AUD": "澳元",
-            "CAD": "加元",
-            "CHF": "瑞士法郎",
-            "INR": "卢比",
-            "IDR": "印尼盾",
-            "MYR": "令吉",
-        }
-        table_tr = {
-            "USD": "美元",
-            "EUR": "歐元",
-            "GBP": "英鎊",
-            "JPY": "日圓",
-            "CNY": "人民幣",
-            "HKD": "港元",
-            "TWD": "新台幣",
-            "SGD": "新幣",
-            "AUD": "澳元",
-            "CAD": "加元",
-            "CHF": "瑞士法郎",
-            "INR": "盧比",
-            "IDR": "印尼盾",
-            "MYR": "令吉",
-        }
-        table = table_tr if trad else table_sim
-        return table.get(code, code)
+    code = str(code).upper().strip()
+    table_sim = {
+        "USD": "美元",
+        "EUR": "欧元",
+        "GBP": "英镑",
+        "JPY": "日元",
+        "CNY": "人民币",
+        "HKD": "港元",
+        "TWD": "新台币",
+        "SGD": "新元",
+        "AUD": "澳元",
+        "CAD": "加元",
+        "CHF": "瑞士法郎",
+        "INR": "卢比",
+        "IDR": "印尼盾",
+        "MYR": "令吉",
+    }
+    table_tr = {
+        "USD": "美元",
+        "EUR": "歐元",
+        "GBP": "英鎊",
+        "JPY": "日圓",
+        "CNY": "人民幣",
+        "HKD": "港元",
+        "TWD": "新台幣",
+        "SGD": "新幣",
+        "AUD": "澳元",
+        "CAD": "加元",
+        "CHF": "瑞士法郎",
+        "INR": "盧比",
+        "IDR": "印尼盾",
+        "MYR": "令吉",
+    }
+    table = table_tr if trad else table_sim
+    return table.get(code, code)
 
 def to_zh_multiplier(mult: str, trad: bool = False) -> str:
     """
@@ -555,9 +546,9 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
 
         Return JSON with exactly these three keys:
         {{
-        "company_name": "...",
-        "establishment_date": "...",
-        "headquarters": "..."
+            "company_name": "...",
+            "establishment_date": "...",
+            "headquarters": "..."
         }}
 
         TEXT_2024:
@@ -894,7 +885,7 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=1200
+            max_tokens=1300
         )
         content = response.choices[0].message.content
         
@@ -1941,7 +1932,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     search_queries_EN = [
         "cash flow statement", "statement of cash flows", "consolidated cash flow statement",
         "net cash from operating activities", "net cash from investing activities", "net cash from financing activities",
-        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents"
+        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents",
     ]
 
     search_queries_ZH_SIM = [
@@ -2348,35 +2339,38 @@ def extract_s2_4(report):
         setattr(km.dividend_payout_ratio, f"year_{year}", payout_ratio)
 
           
-def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4o-mini"):
+def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
     """
     Extracts 'Revenue by Product/Service' and 'Revenue by Geographic Region' from 
     both 2024 and 2023 annual reports using FAISS RAG section search.
     Returns structured JSON for 2024, 2023, 2022.
     """
-
-    # ------------------------------------------------------
-    # 1. Define multilingual queries
-    # ------------------------------------------------------
+    
     queries_EN = [
         "revenue by product",
         "revenue by service",
         "revenue by business segment",
         "revenue by division",
         "revenue by geographic region",
+        "revenue by geographic segments",
+        "revenue by geographical segments",
+        "regional revenue",
         "revenue by country",
         "revenue by area",
         "revenue breakdown",
+        "locational revenue",
+        "revenue by product",
+        "revenue by service", 
         "segmental analysis",
-        "note segment information"
+        "note segment information",
     ]
     queries_ZH_SIM = [
         "按产品划分的收入", "按业务分部的收入", "按地区划分的收入",
-        "按国家划分的收入", "分部信息", "分部收入", "区域收入"
+        "按国家划分的收入", "分部信息", "分部收入", "区域收入",
     ]
     queries_ZH_TR = [
         "按產品劃分的收入", "按業務分部的收入", "按地區劃分的收入",
-        "按國家劃分的收入", "分部資訊", "分部收入", "區域收入"
+        "按國家劃分的收入", "分部資訊", "分部收入", "區域收入",
     ]
 
     queries_IN = [
@@ -2386,6 +2380,8 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         "revenue by business segment",
         "revenue by division",
         "revenue by geographic region",
+        "revenue by geographic segments",
+        "revenue by geographical segments",
         "revenue by country",
         "revenue by area",
         "revenue breakdown",
@@ -2403,7 +2399,8 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         "rincian pendapatan",
         "analisis segmen",
         "catatan informasi segmen",
-        "pendapatan per segmen", "pendapatan per wilayah", "pendapatan per divisi",
+        "pendapatan per segmen",
+        "pendapatan per wilayah", "pendapatan per divisi",
     ]
 
     QUERY_MAP = {
@@ -2413,41 +2410,49 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         Lang.IN: queries_IN
     }
 
-    # ------------------------------------------------------
-    # 2. Get relevant text chunks from both reports
-    # ------------------------------------------------------
     context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
     context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
-
-    combined_context = f"""
-    === 2024 Operating Performance Context ===
-    {context_2024}
-
-    === 2023 Operating Performance Context ===
-    {context_2023}
-    """
     
-    if(len(combined_context) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
+    prompt_2024 = get_s2_5_prompt(context_2024)
+    prompt_2023 = get_s2_5_prompt(context_2023)
+    
+    response_2024 = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
+            {"role": "user", "content": prompt_2024}
+        ],
+        temperature=0
+    )
 
-    # ------------------------------------------------------
-    # 3. Build extraction prompt
-    # ------------------------------------------------------
+    response_2023 = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
+            {"role": "user", "content": prompt_2023}
+        ],
+        temperature=0
+    )
+
+    data_2024 = _safe_json_from_llm(response_2024.choices[0].message.content)
+    data_2023 = _safe_json_from_llm(response_2023.choices[0].message.content)
+    print(f"DEBUG - S2.5 2024 extraction result: {data_2024}")
+    merged = merge_revenue_dicts(data_2024, data_2023)
+    return merged
+
+
+def get_s2_5_prompt(context: str) -> str:
+
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
         You are a forensic financial data extractor.
 
-        GOAL
-        From the CONTEXT, extract revenue breakdowns for fiscal years 2024, 2023, 2022 in two categories:
+        From the CONTEXT, extract the company {COMPANY_NAME}'s revenue breakdowns for fiscal years 2024, 2023, 2022 in two categories:
         • By Product/Service (business segments)
         • By Geographic Region (countries/regions)
 
         STRICT RULES
-        1) Sources (use the first that provides clear revenue numbers; stop after that):
+        1) Identify: 
         a) Consolidated segment note / segment information tables (revenue by business/segment).
         b) Revenue by geographic markets/regions note (explicit revenue by region).
         c) MD&A tables that clearly list revenue by product/service or by region.
@@ -2469,30 +2474,30 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
 
         5) Missing:
         • If a year has no reliable values in CONTEXT for a field, set that field to "N/A".
+        • If you cannot find any values for that year, set that field to "N/A"
 
-        6) Output format (JSON only; no prose, no markdown):
+        6) Output in this FORMAT JSON:
         {{
-        "2024": {{
-            "revenue_by_product_service": "Label1: £123.4m, Label2: £567.8m",
-            "revenue_by_region": "RegionA: £229.2m, RegionB: £172.6m, ..."
-        }},
-        "2023": {{
-            "revenue_by_product_service": "... or N/A",
-            "revenue_by_region": "... or N/A"
-        }},
-        "2022": {{
-            "revenue_by_product_service": "... or N/A",
-            "revenue_by_region": "... or N/A"
+            "2024": {{
+                "revenue_by_product_service": "Label1: £123.4m, Label2: £567.8m",
+                "revenue_by_region": "RegionA: £229.2m, RegionB: £172.6m, ..."
+            }},
+            "2023": {{
+                "revenue_by_product_service": "... or N/A",
+                "revenue_by_region": "... or N/A"
+            }},
+            "2022": {{
+                "revenue_by_product_service": "... or N/A",
+                "revenue_by_region": "... or N/A"
         }}
         }}
 
         7) Formatting of each value line:
-        • Single line per field per year.
         • Items joined by ", " (comma + space).
         • No bullets, no newlines inside the value.
 
         CONTEXT
-        {combined_context}
+        {context}
         """
 
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
@@ -2549,7 +2554,7 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         • 不得使用项目符号或换行。
 
         上下文
-        {combined_context}
+        {context}
         """
 
     elif TARGET_LANGUAGE == Lang.ZH_TR:
@@ -2606,43 +2611,27 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         • 禁止使用項目符號或斷行。
 
         內文
-        {combined_context}
+        {context}
         """
+    return prompt 
 
-    # ------------------------------------------------------
-    # 4. Run LLM extraction
-    # ------------------------------------------------------
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0,
-            max_tokens=2000,
-        )
-
-        result = _safe_json_from_llm(response.choices[0].message.content)
-        # print(f"DEBUG - Operating Performance result: {result}")
-
-        return {
-            "2024": {
-                "revenue_by_product_service": _normalize_na(result.get("2024", {}).get("revenue_by_product_service", "N/A")),
-                "revenue_by_region": _normalize_na(result.get("2024", {}).get("revenue_by_region", "N/A")),
-            },
-            "2023": {
-                "revenue_by_product_service": _normalize_na(result.get("2023", {}).get("revenue_by_product_service", "N/A")),
-                "revenue_by_region": _normalize_na(result.get("2023", {}).get("revenue_by_region", "N/A")),
-            },
-            "2022": {
-                "revenue_by_product_service": _normalize_na(result.get("2022", {}).get("revenue_by_product_service", "N/A")),
-                "revenue_by_region": _normalize_na(result.get("2022", {}).get("revenue_by_region", "N/A")),
-            }
-        }
-
-    except Exception as e:
-        print(f"[ERROR] extract_s2_5_operating_performance: {e}")
+def merge_revenue_dicts(data_2024: dict, data_2023: dict) -> dict:
+    """
+    Merge 2024 and 2023 outputs so:
+    - 2024 values have precedence
+    - If a 2024 field is "N/A", use 2023's corresponding field
+    """
+    merged = {}
+    for year in ["2024", "2023", "2022"]:
+        merged.setdefault(year, {})
+        for field in ["revenue_by_product_service", "revenue_by_region"]:
+            v2024 = data_2024.get(year, {}).get(field, "N/A")
+            v2023 = data_2023.get(year, {}).get(field, "N/A")
+            if not v2024 or v2024.strip().upper() in {"N/A", "NA", ""}:
+                merged[year][field] = v2023
+            else:
+                merged[year][field] = v2024
+    return merged
 
           
 # ===================== Section 3: Business Analysis =====================  
@@ -2673,6 +2662,7 @@ def extract_s3_1(report, model: str = "gpt-4.1-mini"):
     # sufficient?
     financial_context = f"""
         
+        Company: {COMPANY_NAME}
         INCOME STATEMENT:
         Revenue: 2024: {inc.revenue.year_2024}, 2023: {inc.revenue.year_2023}, 2022: {inc.revenue.year_2022}
         Cost of Goods Sold: 2024: {inc.cost_of_goods_sold.year_2024}, 2023: {inc.cost_of_goods_sold.year_2023}, 2022: {inc.cost_of_goods_sold.year_2022}
@@ -2703,136 +2693,144 @@ def extract_s3_1(report, model: str = "gpt-4.1-mini"):
     
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
-        You are a financial analyst performing a comprehensive profitability analysis based on the company's financial data from 2022-2024.
+        You are a financial analyst performing a comprehensive profitability analysis based on the company {COMPANY_NAME}'s financial data from 2022-2024.
         
         INSTRUCTIONS:
         - Analyze ONLY the provided financial data from Section 2
-        - Use exact numbers and percentages as provided
+        - Use exact numbers and percentages as provided, and compute values only if you need 
         - Focus on trends, patterns, and business insights
         - Structure your analysis around the three key perspectives below
         - Output format: Return EXACTLY ONE JSON object with EXACTLY the three keys shown below
-        - Use the currency and multiplier exactly as provided (do not convert units).
+        - State the currency and multiplier exactly as provided.
+        - Do NOT include any text outside the JSON. No markdown, no code fences.
         
-        Analyze the following three perspectives:
-        
-        1. Revenue & Direct-Cost Dynamics
-        - Revenue Growth trends from 2022→2023→2024 (compute as needed)
-        - Gross Margin performance and trends
-        - Revenue by Product/Service breakdown and changes
-        - Revenue by Geographic Region distribution and shifts
-        
-        2. Operating Efficiency  
-        - Operating Margin trends and performance
-        - Operating income vs revenue relationship
-        - Cost management effectiveness
-        
-        3. External & One-Off Impact
-        - Effective Tax Rate changes and impact
-        - Any non-recurring items or unusual patterns
-        - External factors affecting profitability
-        
-        Return JSON with this EXACT schema (keys fixed):
+        TASK (Section 3.1 · Profitability Analysis for {COMPANY_NAME}, 2022–2024)
+        Base your analysis ONLY on FINANCIAL DATA. Each field must include at least 2–3 numeric anchors copied exactly from FINANCIAL DATA/DERIVED.
+
+        1) revenue_direct_cost_dynamics
+        - Revenue trend 2022→2023→2024
+        - Gross margin performance/trend
+        - Revenue by Product/Service and by Geographic Region
+
+        2) operating_efficiency
+        - Operating margin trend and performance
+        - Operating income versus revenue (use stated numbers only)
+        - Cost management observations grounded in the provided figures
+
+        3) external_oneoff_impact
+        - Effective tax rate changes and their impact
+        - Non-recurring items if explicitly listed in FINANCIAL DATA
+        - External factors affecting profitability if explicitly listed
+
+        OUTPUT SCHEMA (keys fixed; values are complete sentences):
         {{
-            "revenue_direct_cost_dynamics": "Detailed analysis of revenue growth, gross margins, product/service revenue, and geographic revenue trends using specific numbers from the data",
-            "operating_efficiency": "Analysis of operating margin trends, efficiency improvements/deterioration, and operational performance using specific metrics",
-            "external_oneoff_impact": "Analysis of tax rate changes, non-recurring items, and external factors affecting profitability using specific data points"
+            "revenue_direct_cost_dynamics": "...",
+            "operating_efficiency": "...",
+            "external_oneoff_impact": "..."
         }}
-        
-        The currency is: {currency}.
-        The currency multiplier is: {multiplier}.
-        
-        FINANCIAL DATA:
+
+        CONVENTIONS
+        - Currency: {currency}
+        - Multiplier: {multiplier}
+
+        FINANCIAL DATA
         {financial_context}
         """
             
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
         prompt = f"""
-        你是一名财务分析师，基于公司2022-2024年的财务数据进行全面的盈利能力分析。
-        
-        指示：
-        - 仅分析第二部分提供的财务数据
-        - 计算所需的数值，并明确标注币种。 
-        - 使用提供的准确数字和百分比
-        - 专注于趋势、模式和商业洞察
-        - 围绕以下三个关键角度构建分析
-        - 输出格式：仅输出**一个 JSON 对象**，且**只能包含以下三个键**，每个键的值必须为**简体中文**完整句子。
-        
-        分析以下三个角度：
-        
-        1. 收入与直接成本动态
-        - 2022→2023→2024年收入增长趋势
-        - 毛利率表现和趋势
-        - 按产品/服务的收入分解和变化
-        - 按地理区域的收入分布和变化
-        
-        2. 营运效率
-        - 营业利润率趋势和表现
-        - 营业收入与收入的关系
-        - 成本管理有效性
-        
-        3. 外部和一次性影响
-        - 有效税率变化和影响
-        - 任何非经常性项目或异常模式
-        - 影响盈利能力的外部因素
-        
-        按如下**精确结构与键名**返回 JSON（值为简体中文；缺失则写 "N/A"）：
+        你是一名资深财务分析师。请仅输出**一个 JSON 对象**，键名与下方模式完全一致，值为**简体中文**完整句子。
+
+        【硬性规则】
+        - 只能使用 **FINANCIAL DATA**（以及存在时的【DERIVED】）中**逐字出现**的数字/百分比/比率；不得引入任何新数字。
+        - 若某项数据在 **FINANCIAL DATA/DERIVED** 中不存在，请写 "N/A"。
+        - 单位与格式：利润率/税率用“%”；利润率变化用“pp”；比率（如需要）用“x”（无单位）。
+        - 禁止讨论流动性、杠杆、现金流、ROE/ROA 等**非本节**话题。
+        - 只输出 JSON，不得包含额外说明、Markdown 或代码块。
+
+        【任务】（第3.1节 · 盈利能力分析，{COMPANY_NAME}，2022–2024）
+        仅基于 **FINANCIAL DATA** 完成以下三个字段，每个字段至少包含 **2–3 个**从 **FINANCIAL DATA/DERIVED** 原样拷贝的数值锚点。
+
+        1) revenue_direct_cost_dynamics
+        - 2022→2023→2024 的收入趋势
+        - 毛利率表现与趋势
+        - 按产品/服务与按地区的收入分解（若缺失则写 "N/A"）
+
+        2) operating_efficiency
+        - 营业利润率趋势与表现
+        - 营业收入与收入的关系（仅引用已给数据）
+        - 成本管理观察（必须可由已给数据直接支撑）
+
+        3) external_oneoff_impact
+        - 有效税率变化及影响
+        - 仅当 **FINANCIAL DATA** 明确列出时，描述非经常性项目；否则写 "N/A"
+        - 仅当 **FINANCIAL DATA** 明确列出时，描述影响盈利的外部因素；否则写 "N/A"
+
+        【输出 JSON 结构（键名固定）】
         {{
-            "revenue_direct_cost_dynamics": "使用数据中的具体数字详细分析收入增长、毛利率、产品/服务收入和地理收入趋势",
-            "operating_efficiency": "使用具体指标分析营业利润率趋势、效率改善/恶化和营运表现",
-            "external_oneoff_impact": "使用具体数据点分析税率变化、非经常性项目和影响盈利能力的外部因素"
+            "revenue_direct_cost_dynamics": "...",
+            "operating_efficiency": "...",
+            "external_oneoff_impact": "..."
         }}
-        
-        计量信息：币种：{currency_cn_sim}；数量级：{multiplier_cn_sim}。
-        
-        财务数据：
+
+        【计量信息】
+        - 币种：{currency_cn_sim}
+        - 数量级：{multiplier_cn_sim}
+        - 若存在【DERIVED】，仅引用其中已计算好的同比/变化值；**不要自行重新计算**。
+
+        FINANCIAL DATA
         {financial_context}
         """
         
     elif TARGET_LANGUAGE == Lang.ZH_TR:
         prompt = f"""
-        你是一位財務分析師，基於公司2022-2024年的財務資料進行全面的獲利能力分析。
-        
-        指示：
-        - 僅分析第二部分提供的財務資料
-        - 計算所需的數值，並明確標示幣別。
-        - 使用提供的準確數字和百分比
-        - 專注於趨勢、模式和商業洞察
-        - 圍繞以下三個關鍵角度建構分析
-        
-        分析以下三個角度：
-        
-        1. 營收與直接成本動態
-        - 2022→2023→2024年營收增長趨勢
-        - 毛利率表現和趨勢
-        - 按產品/服務的營收分解和變化
-        - 按地理區域的營收分布和變化
-        
-        2. 營運效率
-        - 營業利潤率趨勢和表現
-        - 營業收入與營收的關係
-        - 成本管理有效性
-        
-        3. 外部和一次性影響
-        - 有效稅率變化和影響
-        - 任何非經常性項目或異常模式
-        - 影響獲利能力的外部因素
-        
-        按如下**精確結構與鍵名**回傳 JSON（值為繁體中文；缺失則寫 "N/A"）：
+        你是一位資深財務分析師。請僅輸出**一個 JSON 物件**，鍵名與下方模式完全一致，值為**繁體中文**完整句子。
+
+        【硬性規則】
+        - 只能使用 **FINANCIAL DATA**（及存在時之【DERIVED】）中**逐字出現**的數字／百分比／比率；不得引入任何新數字。
+        - 若某項資料在 **FINANCIAL DATA/DERIVED** 中不存在，請寫 "N/A"。
+        - 單位與格式：利潤率／稅率用「%」；利潤率變化用「pp」；比率（如需要）用「x」（無單位）。
+        - 禁止討論流動性、槓桿、現金流、ROE/ROA 等**非本節**主題。
+        - 只輸出 JSON，不得包含額外說明、Markdown 或程式碼區塊。
+
+        【任務】（第3.1節 · 獲利能力分析，{COMPANY_NAME}，2022–2024）
+        僅基於 **FINANCIAL DATA** 完成以下三個欄位，每個欄位至少包含 **2–3 個**從 **FINANCIAL DATA/DERIVED** 原樣拷貝的數值錨點。
+
+        1) revenue_direct_cost_dynamics
+        - 2022→2023→2024 的營收趨勢
+        - 毛利率表現與趨勢
+        - 按產品／服務與按地區的營收分解（若缺失則寫 "N/A"）
+
+        2) operating_efficiency
+        - 營業利潤率趨勢與表現
+        - 營業收入與營收的關係（僅引用已給資料）
+        - 成本管理觀察（必須可由已給資料直接支撐）
+
+        3) external_oneoff_impact
+        - 有效稅率變化及影響
+        - 僅當 **FINANCIAL DATA** 明確列出時，描述非經常性項目；否則寫 "N/A"
+        - 僅當 **FINANCIAL DATA** 明確列出時，描述影響獲利的外部因素；否則寫 "N/A"
+
+        【輸出 JSON 結構（鍵名固定）】
         {{
-            "revenue_direct_cost_dynamics": "使用資料中的具體數字詳細分析營收增長、毛利率、產品/服務營收和地理營收趨勢",
-            "operating_efficiency": "使用具體指標分析營業利潤率趨勢、效率改善/惡化和營運表現",
-            "external_oneoff_impact": "使用具體資料點分析稅率變化、非經常性項目和影響獲利能力的外部因素"
+        "revenue_direct_cost_dynamics": "...",
+        "operating_efficiency": "...",
+        "external_oneoff_impact": "..."
         }}
-        
-        計量資訊：幣別：{currency_cn_tr}；數量級：{multiplier_cn_tr}。
-        
-        財務資料：
+
+        【計量資訊】
+        - 幣別：{currency_cn_tr}
+        - 數量級：{multiplier_cn_tr}
+        - 若存在【DERIVED】，僅引用其中已計算之同比／變化值；**不要自行重新計算**。
+
+        FINANCIAL DATA
         {financial_context}
         """
-    
+            
     try:
         response = client.chat.completions.create(
             model=model,
+            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": "You are an expert financial analyst. Analyze only the provided data and provide insightful business interpretations. Return valid JSON only."},
                 {"role": "user", "content": prompt}
@@ -2872,6 +2870,7 @@ def build_financial_context_s3_2(report, year: int):
     years_to_include = [y for y in [previous_year, year] if y is not None]
 
     context = f"""
+    COMPANY: {COMPANY_NAME}
     CURRENCY: {getattr(inc, 'primary_currency', 'N/A')}
     MULTIPLIER: {getattr(inc, 'primary_multiplier', 'N/A')}
     TARGET REPORTING PERIOD: {year}
@@ -2944,40 +2943,27 @@ def build_prompt_for_year(year: int, financial_context: str):
         prompt = f"""
         You are a senior financial analyst preparing a comprehensive Financial Performance Summary for fiscal year {year}.
 
+        TASK (Financial Performance Summary · {COMPANY_NAME} · Fiscal {year})
         STRICT INSTRUCTIONS
         - Focus on {year} as the primary year, but you MAY reference any other years that appear in FINANCIAL DATA to describe direction/magnitude in words (e.g., “higher/lower”, “improved/worsened”) and to quote exact values.
         - Use only the values present in FINANCIAL DATA. Do not use external knowledge.
         - Use the currency and multiplier exactly as provided (do not convert units). If a figure is “N/A”, treat it as unavailable and do not infer it.
 
-        Analyze the following five perspectives for {year}:
-        1) Comprehensive Financial Health
-        - Overall financial position and balance sheet strength
-        - Asset growth, liability management, and equity position
-        - Liquidity and capital structure trends
-        2) Profitability and Earnings Quality
-        - Revenue and profit trends
-        - Margin analysis (gross, operating, net)
-        - Return ratios (ROE, ROA) and earnings sustainability
-        3) Operational Efficiency
-        - Operating margin/cost control
-        - Asset utilization/turnover ratios
-        - Cash flow from operations and working capital
-        4) Financial Risk Identification and Early Warning
-        - Leverage and liquidity indicators
-        - Interest coverage, tax rate changes, and other risks
-        5) Future Financial Performance Projection
-        - Investment activities and growth indicators
-        - Cash flow sustainability/dividend policy
-        - Market/segment or geographic trends noted in the data
+        Analyze the following five perspectives for {year} for {COMPANY_NAME}:
+        1) Comprehensive Financial Health — assets/liabilities/equity, liquidity, capital structure
+        2) Profitability & Earnings Quality — revenue/profit trends, gross/operating/net margins, ROE/ROA if present
+        3) Operational Efficiency — cost control, asset utilization/turnover, cash from operations & working capital, cash flow
+        4) Financial Risk Identification & Early Warning — leverage/liquidity indicators, interest coverage, tax rate changes, other risks
+        5) Future Financial Performance Projection — investment activity, cash flow sustainability/dividend policy, segment/geographic cues
 
         OUTPUT FORMAT
-        Return valid JSON with exactly these keys (no extra keys or commentary):
+        Return ONLY a JSON object with EXACTLY these 5 keys.
         {{
-        "comprehensive_financial_health_{year}": "Detailed analysis for {year}",
-        "profitability_earnings_quality_{year}": "Detailed analysis for {year}",
-        "operational_efficiency_{year}": "Detailed analysis for {year}",
-        "financial_risk_identification_{year}": "Detailed analysis for {year}",
-        "future_financial_performance_projection_{year}": "Detailed analysis for {year}"
+            "comprehensive_financial_health_{year}": "Detailed analysis for {year}",
+            "profitability_earnings_quality_{year}": "Detailed analysis for {year}",
+            "operational_efficiency_{year}": "Detailed analysis for {year}",
+            "financial_risk_identification_{year}": "Detailed analysis for {year}",
+            "future_financial_performance_projection_{year}": "Detailed analysis for {year}"
         }}
 
         FINANCIAL DATA (current year plus any reference years):
@@ -3006,11 +2992,11 @@ def build_prompt_for_year(year: int, financial_context: str):
 
         【严格的 JSON 输出结构（键名固定为英文；值为简体中文，仅以下五个键）】
         {{
-        "comprehensive_financial_health_{year}": "基于 FINANCIAL DATA 对 {year} 的综合财务健康分析；必要时可引用其他出现年度做方向性对比或逐字引用现成同比/比率；若无可写则填 N/A",
-        "profitability_earnings_quality_{year}": "基于 FINANCIAL DATA 对 {year} 的盈利能力与盈利质量分析；可引用出现年度做方向性对比；若无则填 N/A",
-        "operational_efficiency_{year}": "基于 FINANCIAL DATA 对 {year} 的营运效率分析；可引用出现年度做方向性对比；若无则填 N/A",
-        "financial_risk_identification_{year}": "基于 FINANCIAL DATA 对 {year} 的财务风险识别与预警；仅引用已给事实；若无则填 N/A",
-        "future_financial_performance_projection_{year}": "基于 FINANCIAL DATA 对 {year} 的未来财务展望（不新增计算）；若无则填 N/A"
+            "comprehensive_financial_health_{year}": "基于 FINANCIAL DATA 对 {year} 的综合财务健康分析；必要时可引用其他出现年度做方向性对比或逐字引用现成同比/比率；若无可写则填 N/A",
+            "profitability_earnings_quality_{year}": "基于 FINANCIAL DATA 对 {year} 的盈利能力与盈利质量分析；可引用出现年度做方向性对比；若无则填 N/A",
+            "operational_efficiency_{year}": "基于 FINANCIAL DATA 对 {year} 的营运效率分析；可引用出现年度做方向性对比；若无则填 N/A",
+            "financial_risk_identification_{year}": "基于 FINANCIAL DATA 对 {year} 的财务风险识别与预警；仅引用已给事实；若无则填 N/A",
+            "future_financial_performance_projection_{year}": "基于 FINANCIAL DATA 对 {year} 的未来财务展望（不新增计算）；若无则填 N/A"
         }}
 
         【合规哨兵】
@@ -3043,11 +3029,11 @@ def build_prompt_for_year(year: int, financial_context: str):
 
         【嚴格的 JSON 輸出結構（鍵名固定英文；值為繁體中文，僅以下五鍵）】
         {{
-        "comprehensive_financial_health_{year}": "基於 FINANCIAL DATA 對 {year} 的綜合財務健康分析；必要時可引用其他出現年度做方向性對比或逐字引用既有同比／比率；若無則填 N/A",
-        "profitability_earnings_quality_{year}": "基於 FINANCIAL DATA 對 {year} 的獲利能力與盈餘品質分析；可引用出現年度做方向性對比；若無則填 N/A",
-        "operational_efficiency_{year}": "基於 FINANCIAL DATA 對 {year} 的營運效率分析；可引用出現年度做方向性對比；若無則填 N/A",
-        "financial_risk_identification_{year}": "基於 FINANCIAL DATA 對 {year} 的財務風險識別與預警；僅引用已給事實；若無則填 N/A",
-        "future_financial_performance_projection_{year}": "基於 FINANCIAL DATA 對 {year} 的未來財務展望（不新增計算）；若無則填 N/A"
+            "comprehensive_financial_health_{year}": "基於 FINANCIAL DATA 對 {year} 的綜合財務健康分析；必要時可引用其他出現年度做方向性對比或逐字引用既有同比／比率；若無則填 N/A",
+            "profitability_earnings_quality_{year}": "基於 FINANCIAL DATA 對 {year} 的獲利能力與盈餘品質分析；可引用出現年度做方向性對比；若無則填 N/A",
+            "operational_efficiency_{year}": "基於 FINANCIAL DATA 對 {year} 的營運效率分析；可引用出現年度做方向性對比；若無則填 N/A",
+            "financial_risk_identification_{year}": "基於 FINANCIAL DATA 對 {year} 的財務風險識別與預警；僅引用已給事實；若無則填 N/A",
+            "future_financial_performance_projection_{year}": "基於 FINANCIAL DATA 對 {year} 的未來財務展望（不新增計算）；若無則填 N/A"
         }}
 
         【合規哨兵】
@@ -3429,6 +3415,7 @@ def _extract_risk_factors_single_year(context: str, year: str, model: str):
         prompt = f"""
         You are a risk analyst extracting information about risk factors from a company's {year} annual report.
         
+        COMPANY: {COMPANY_NAME}
         Extract the following four categories of risks:
         
         1. Market Risks: Risks related to market conditions, economic environment, competition, demand volatility, 
@@ -3466,6 +3453,7 @@ def _extract_risk_factors_single_year(context: str, year: str, model: str):
         prompt = f"""
         你是一名风险分析师，从公司{year}年年度报告中提取风险因素信息。
         
+        公司：{COMPANY_NAME}
         提取以下四类风险：
         
         1. 市场风险：与市场条件、经济环境、竞争、需求波动、行业趋势、客户行为以及可能影响业务的外部市场因素相关的风险。
@@ -3500,6 +3488,7 @@ def _extract_risk_factors_single_year(context: str, year: str, model: str):
         prompt = f"""
         你是一位風險分析師，從公司{year}年年度報告中擷取風險因素資訊。
         
+        公司：{COMPANY_NAME}
         擷取以下四類風險：
         
         1. 市場風險：與市場條件、經濟環境、競爭、需求波動、行業趨勢、客戶行為以及可能影響業務的外部市場因素相關的風險。
@@ -3804,7 +3793,10 @@ def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "control procedures risk management control framework",
             "audit committee internal controls risk committee",
             "control environment risk assessment control monitoring",
-            "internal control evaluation control testing control design"
+            "internal control evaluation control testing control design",
+            "weaknesses in internal controls significant deficiencies"
+            "material weaknesses", "material deficiencies", "control deficiency", "control deficiencies",
+            "remediation", "remedial actions", "disclosure controls and procedures", "internal controls"
         ]
         
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
@@ -3818,7 +3810,10 @@ def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "控制程序 风险管理 控制框架",
             "审计委员会 内部控制 风险委员会",
             "控制环境 风险评估 控制监督",
-            "内控评价 控制测试 控制设计"
+            "内控评价 控制测试 控制设计", 
+            "内部控制", "重大缺陷", "控制缺陷",
+            "补救措施", "补救行动", "披露控制和程序", 
+            "内部控制", "重大缺陷", "管理层对内部控制的评估"
         ]
         
     elif TARGET_LANGUAGE == Lang.ZH_TR:
@@ -3832,7 +3827,9 @@ def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "控制程序 風險管理 控制框架",
             "審計委員會 內部控制 風險委員會",
             "控制環境 風險評估 控制監督",
-            "內控評價 控制測試 控制設計"
+            "內控評價 控制測試 控制設計",
+            "內部控制", "風險評估程序", "控制活動", "監控機制",
+            "COSO 2013", "重大缺陷", "財務報告內部控制"
         ]
         
     elif TARGET_LANGUAGE == Lang.IN:
@@ -3861,19 +3858,6 @@ def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     print("🔍 Searching for Internal Controls information in 2023 report...")
     context_2023 = retrieve_relevant_text(internal_controls_queries, top_k, md_file_2023)
     
-    if len(context_2024) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    if len(context_2023) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    
     # Extract Internal Controls for 2024
     result_2024 = _extract_internal_controls_single_year(context_2024, "2024", model)
     
@@ -3900,7 +3884,7 @@ def _extract_internal_controls_single_year(context: str, year: str, model: str):
     
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
-        You are a corporate governance analyst extracting information about internal controls from a company's {year} annual report.
+        You are a corporate governance analyst extracting information about internal controls from a {COMPANY_NAME}'s {year} annual report.
         
         Extract the following five categories of internal control information:
         
@@ -3936,6 +3920,7 @@ def _extract_internal_controls_single_year(context: str, year: str, model: str):
             "effectiveness": "Assessment of internal control effectiveness from {year} report"
         }}
         
+        COMPANY: {COMPANY_NAME}
         TEXT FROM {year} ANNUAL REPORT:
         {context}
         """
@@ -3944,6 +3929,7 @@ def _extract_internal_controls_single_year(context: str, year: str, model: str):
         prompt = f"""
         你是一名公司治理分析师，从公司{year}年年度报告中提取内部控制信息。
         
+        公司：{COMPANY_NAME}
         提取以下五类内部控制信息：
         
         1. 风险评估程序：公司如何识别、评估和评价风险。包括方法论、框架、工具和用于风险识别和评估的流程。如未提及，返回"N/A"。
@@ -3981,6 +3967,7 @@ def _extract_internal_controls_single_year(context: str, year: str, model: str):
         prompt = f"""
         你是一位公司治理分析師，從公司{year}年年度報告中擷取內部控制資訊。
         
+        公司：{COMPANY_NAME}
         擷取以下五類內部控制資訊：
         
         1. 風險評估程序：公司如何識別、評估和評價風險。包括方法論、框架、工具和用於風險識別和評估的流程。
@@ -4364,7 +4351,7 @@ def _extract_challenges_uncertainties_single_year(context: str, year: str, model
     
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
-        You are a business analyst extracting information about challenges and uncertainties from a company's {year} annual report.
+        You are a business analyst extracting information about challenges and uncertainties from a {COMPANY_NAME}'s {year} annual report.
         
         Extract the following two categories of challenges and uncertainties:
         
@@ -4388,7 +4375,7 @@ def _extract_challenges_uncertainties_single_year(context: str, year: str, model
             "economic_challenges": "Description of economic challenges and uncertainties from {year} report",
             "competitive_pressures": "Description of competitive pressures and market challenges from {year} report"
         }}
-        
+        COMPANY: {COMPANY_NAME}
         TEXT FROM {year} ANNUAL REPORT:
         {context}
         """
@@ -4415,7 +4402,7 @@ def _extract_challenges_uncertainties_single_year(context: str, year: str, model
             "economic_challenges": "{year}年报告中经济挑战和不确定性的描述",
             "competitive_pressures": "{year}年报告中竞争压力和市场挑战的描述"
         }}
-        
+        公司：{COMPANY_NAME}
         {year}年年度报告文本：
         {context}
         """
@@ -4436,7 +4423,7 @@ def _extract_challenges_uncertainties_single_year(context: str, year: str, model
         - 包括關於經濟因素、競爭威脅和市場條件的具體細節
         - 為每個類別提供全面而簡明的描述
         - 如果文本中未涉及某個類別，返回"N/A"
-        
+        公司：{COMPANY_NAME}
         以JSON格式回傳分析，使用以下確切結構：
         {{
             "economic_challenges": "{year}年報告中經濟挑戰和不確定性的描述",
@@ -4484,7 +4471,10 @@ def extract_s6_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "R&D expenditure research spending development costs",
             "innovation programs technology development product differentiation",
             "new solutions market trends technology solutions",
-            "product portfolio innovation capabilities technology focus"
+            "product portfolio innovation capabilities technology focus",
+            "market trends", "technology solutions", "adapting to market changes",
+            "innovation focus areas", "future product development", "improving products",
+            "improving services"
         ]
         
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
@@ -4539,19 +4529,6 @@ def extract_s6_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     # Search and get context for 2023 
     print("🔍 Searching for Innovation and Development Plans information in 2023 report...")
     context_2023 = retrieve_relevant_text(innovation_queries, top_k, md_file_2023)
-    
-    if len(context_2024) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    if len(context_2023) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
     
     # Extract Innovation and Development Plans for 2024
     result_2024 = _extract_innovation_development_single_year(context_2024, "2024", model)
@@ -4946,7 +4923,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("📊 PROCESSING: S2.5 - Operating Performance")
     print("=" * 60)
 
-    operating_perf = extract_s2_5(md_file_2024, md_file_2023, top_k=10, model="gpt-4o-mini")
+    operating_perf = extract_s2_5(md_file_2024, md_file_2023, top_k=15, model="gpt-4.1-mini")
 
     report.operating_performance.revenue_by_product_service.year_2024 = operating_perf["2024"]["revenue_by_product_service"]
     report.operating_performance.revenue_by_product_service.year_2023 = operating_perf["2023"]["revenue_by_product_service"]
@@ -5097,6 +5074,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
 
     # Extract financial performance summary based on Section 2 data
     financial_performance_summary = extract_s3_2(report, model="gpt-4.1-mini")
+    # financial_performance_summary = extract_s3_2(report, model="gpt-5")
 
     # Save to report structure
     fps = report.financial_performance_summary

@@ -23,6 +23,7 @@ class Lang(str, Enum):
     EN = "EN" # Standard English
     ZH_SIM = "ZH_SIM"   # Simplified Chinese (CN)
     ZH_TR = "ZH_TR"   # Traditional Chinese (HK)
+    IN = "IN"   # Indonesian
 
 TARGET_LANGUAGE = Lang.EN
 
@@ -496,7 +497,12 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
             "公司名称 成立时间 总部",
             "公司简介 基本信息",
             "公司历史 创立 关于公司",
-            "企业信息 成立"
+            "企业信息 成立", 
+            "公司全称 法定名称",
+            "注册地址 办公地址 总部地址",
+            "成立日期 注册时间 设立时间",
+            "注册资本 成立年份",
+            "主要办事处 营业地址"
         ]
     elif TARGET_LANGUAGE == Lang.ZH_TR:
         search_queries = [
@@ -505,7 +511,25 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
             "公司歷史 創立 關於公司",
             "企業資訊 成立"
         ]
-
+    elif TARGET_LANGUAGE == Lang.IN:
+        indo_keywords = [
+            "nama perusahaan",
+            "informasi perusahaan",
+            "kantor pusat",
+            "profil perusahaan informasi dasar",
+            "tentang perusahaan sejarah pendirian",
+            "informasi korporat pendirian"
+        ]
+        search_queries = [
+            "company name",
+            "company information", 
+            "headquarters", 
+            "company name establishment date headquarters",
+            "company profile basic information",
+            "about the company history founding",
+            "corporate information establishment"
+        ] + indo_keywords 
+        
     context = retrieve_relevant_text(search_queries, top_k, md_file_2024)
     if(len(context) > 350_000):
         print(f"===========================================================================")
@@ -513,7 +537,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         print(f"[WARN] Context length {len(context)} exceeds 350_000 characters, truncating.")
         print(f"===========================================================================")
         print(f"===========================================================================")
-    
+
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
         Extract the following basic company information from the provided text (TEXT_2024) only:
@@ -667,7 +691,10 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
         "声誉评级": [
             "公司声誉 奖项 认可",
             "企业责任 可持续发展 ESG",
-            "利益相关方信任 信誉评级"
+            "利益相关方信任 信誉评级", "核心技术 专利技术 知识产权",
+            "产品质量 产品认证 质量标准", 
+            "品牌价值 客户忠诚度 市场口碑",
+            "行业地位 企业荣誉 资质认证"
         ]
     }
 
@@ -694,10 +721,62 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
         ]
     }
     
+    search_queries_IN = {
+        "Innovation Advantages": [
+            # English
+            "Innovation Advantages",
+            "innovation technology R&D research development",
+            "digital transformation AI artificial intelligence",
+            "product development new products innovation",
+            # Indonesian
+            "keunggulan inovasi",
+            "inovasi teknologi penelitian dan pengembangan",
+            "transformasi digital kecerdasan buatan AI",
+            "pengembangan produk produk baru inovasi",
+        ],
+        "Product Advantages": [
+            # English
+            "product advantages",
+            "product portfolio market leadership brands",
+            "product quality safety standards",
+            "product categories market share",
+            # Indonesian
+            "keunggulan produk",
+            "portofolio produk kepemimpinan pasar merek",
+            "kualitas produk standar keamanan",
+            "kategori produk pangsa pasar",
+        ],
+        "Brand Recognition": [
+            # English
+            "brand recognition",
+            "brand recognition market leader awards",
+            "brand equity consumer loyalty",
+            "brand portfolio marketing campaigns",
+            # Indonesian
+            "pengakuan merek",
+            "pengakuan merek pemimpin pasar penghargaan",
+            "ekuitas merek loyalitas konsumen",
+            "portofolio merek kampanye pemasaran",
+        ],
+        "Reputation Ratings": [
+            # English
+            "reputation ratings",
+            "company reputation awards recognition",
+            "corporate responsibility sustainability ESG",
+            "stakeholder trust credibility ratings",
+            # Indonesian
+            "reputasi perusahaan",
+            "penilaian reputasi penghargaan pengakuan",
+            "tanggung jawab perusahaan keberlanjutan ESG",
+            "kepercayaan pemangku kepentingan kredibilitas penilaian",
+        ]
+    }
+    
     QUERY_MAP = {
         Lang.EN: search_queries_EN,
         Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR
+        Lang.ZH_TR: search_queries_ZH_TR,
+        Lang.IN: search_queries_IN,
     }
 
     selected_queries = QUERY_MAP[TARGET_LANGUAGE]
@@ -815,7 +894,7 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=900
+            max_tokens=1200
         )
         content = response.choices[0].message.content
         
@@ -866,6 +945,16 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
             "公司使命", "我們的使命", "使命",
             "公司願景", "我們的願景", "願景 未來",
             "核心價值觀", "企業價值觀", "公司價值觀 理念"
+        ]
+    elif TARGET_LANGUAGE == Lang.IN:
+        # Bahasa Indonesia (official language of IDX and OJK filings)
+        search_queries = [
+            "nilai inti", "nilai utama", "nilai perusahaan", "nilai korporasi",
+            "misi", "pernyataan misi", "misi perusahaan", "misi kami",
+            "visi", "pernyataan visi", "visi perusahaan", "visi kami", "visi masa depan",
+            "misi dan visi", "visi dan misi", "visi misi perusahaan",
+            "inovasi", "integritas", "kolaborasi", "keragaman dan inklusi",
+            "prinsip nilai", "keyakinan perusahaan", "nilai-nilai organisasi", "etos kerja"
         ]
         
     context = retrieve_relevant_text(search_queries, top_k, md_file_2024)
@@ -1240,7 +1329,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "income statement", "profit and loss", "P&L statement",
         "revenue", "financial highlights", "gross profit", "sales", "cost of goods sold",
         "operating expenses", "operating income", "net profit net income",
-        "income before taxes", "tax expense", "interest expense", "financial year end"
+        "income before taxes", "tax expense", "interest expense", "financial year end",
         "consolidated income statement", "statement of comprehensive income"
     ]
     
@@ -1249,7 +1338,10 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "营业收入 收入", "营业成本 销售成本", "毛利润",
         "营业费用", "营业利润", "净利润",
         "税前利润", "所得税费用", "利息费用",
-        "合并利润表", "综合收益表"
+        "合并利润表", "综合收益表", "税前利润 利润总额",
+        "所得税费用 税费",
+        "财务费用 利息支出",
+        "其他业务收入 投资收益"
     ]
     
     search_queries_ZH_TR = [
@@ -1260,12 +1352,30 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "合併利潤表", "綜合收益表"
     ]
     
+    search_queries_IN = [
+        # English (base)
+        "income statement", "profit and loss", "P&L statement",
+        "revenue", "financial highlights", "gross profit", "sales", "cost of goods sold",
+        "operating expenses", "operating income", "net profit net income",
+        "income before taxes", "tax expense", "interest expense",
+        "financial year end", "consolidated income statement", "statement of comprehensive income",
+
+        # Indonesian
+        "laporan laba rugi", "laporan pendapatan",
+        "pendapatan", "penjualan", "laba kotor",
+        "beban pokok penjualan", "beban operasional", "laba operasi",
+        "laba bersih", "laba sebelum pajak", "beban pajak penghasilan",
+        "beban bunga", "tahun buku berakhir", "laporan laba rugi konsolidasian",
+        "laporan laba rugi komprehensif", "ikhtisar keuangan",
+    ]
+        
     QUERY_MAP = {
         Lang.EN: search_queries_EN,
         Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR
+        Lang.ZH_TR: search_queries_ZH_TR,
+        Lang.IN: search_queries_IN
     }
-
+    
     context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
     prompt_2024 = build_s2_1_prompt(context_2024, year=2024)
     
@@ -1418,7 +1528,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         "non-current assets", "property plant equipment", "bank borrowing", "investments"
         "total liabilities", "current liabilities", "non-current liabilities",
         "total equity", "shareholders equity", "stockholders equity", 
-        "retained earnings", "share capital", "prepaid expenses"
+        "retained earnings", "share capital", "prepaid expenses", "consolidated statement of changes in equity", "inventories"
     ]
     
     search_queries_ZH_SIM = [
@@ -1426,7 +1536,14 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         "资产总计", "流动资产", "非流动资产", "固定资产",
         "负债合计", "流动负债", "非流动负债",
         "股东权益", "所有者权益", "权益总计",
-        "未分配利润", "股本", "实收资本"
+        "未分配利润", "股本", "实收资本", 
+        "货币资金 现金及现金等价物",
+        "应收账款 预付款项 其他应收款",
+        "存货 库存商品",
+        "固定资产 无形资产 长期资产",
+        "应付账款 短期借款 长期借款",
+        "未分配利润 留存收益",
+        "负债和所有者权益总计"
     ]
     
     search_queries_ZH_TR = [
@@ -1436,11 +1553,28 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         "股東權益", "所有者權益", "權益總計",
         "未分配利潤", "股本", "實收資本"
     ]
-    
+    search_queries_IN = [
+        # English (for bilingual filings)
+        "balance sheet", "statement of financial position", "consolidated balance sheet",
+        "total assets", "financial highlights", "financial results", "financial position", 
+        "current assets", "non-current assets", "property plant equipment", "bank borrowing", "investments",
+        "total liabilities", "current liabilities", "non-current liabilities",
+        "total equity", "shareholders equity", "stockholders equity", 
+        "retained earnings", "share capital", "prepaid expenses",
+
+        # Indonesian
+        "neraca", "laporan posisi keuangan", "laporan keuangan konsolidasian",
+        "total aset", "aset lancar", "aset tidak lancar", "aset tetap",
+        "jumlah kewajiban", "liabilitas lancar", "liabilitas jangka panjang", "kewajiban jangka panjang",
+        "ekuitas total", "ekuitas pemegang saham", "ekuitas pemilik",
+        "laba ditahan", "modal saham", "modal disetor", "posisi keuangan",
+    ]
+        
     QUERY_MAP = {
         Lang.EN: search_queries_EN,
         Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR
+        Lang.ZH_TR: search_queries_ZH_TR,
+        Lang.IN: search_queries_IN
     }
 
     context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
@@ -1813,7 +1947,8 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     search_queries_ZH_SIM = [
         "现金流量表", "合并现金流量表", "现金流量状况表",
         "经营活动产生的现金流量净额", "投资活动产生的现金流量净额", "筹资活动产生的现金流量净额",
-        "现金及现金等价物净增加额", "现金净流入 净流出", "分红 股息 支付", "现金及现金等价物"
+        "现金及现金等价物净增加额", "现金净流入 净流出", "分红 股息 支付", "现金及现金等价物", "现金流入 现金流出",
+        "股利支付 分红派息"
     ]
 
     search_queries_ZH_TR = [
@@ -1821,11 +1956,25 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "營運活動產生之現金流量淨額", "投資活動產生之現金流量淨額", "籌資活動產生之現金流量淨額", 
         "現金及約當現金淨增加額", "現金淨流入 淨流出", "股息 分紅 支付", "現金及約當現金"
     ]
+    
+    search_queries_IN = [
+        # English (for bilingual filings)
+        "cash flow statement", "statement of cash flows", "consolidated cash flow statement",
+        "net cash from operating activities", "net cash from investing activities", "net cash from financing activities",
+        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents", "consolidated statement of cash flows"
+
+        # Indonesian
+        "laporan arus kas", "laporan arus kas konsolidasian", "arus kas",
+        "arus kas dari aktivitas operasi", "arus kas dari aktivitas investasi", "arus kas dari aktivitas pendanaan",
+        "kenaikan bersih kas", "penurunan bersih kas", "pembayaran dividen", "kas dan setara kas",
+        "arus kas bersih", "arus kas masuk keluar", "laporan arus kas gabungan",
+    ]
 
     QUERY_MAP = {
         Lang.EN: search_queries_EN,
         Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR
+        Lang.ZH_TR: search_queries_ZH_TR,
+        Lang.IN: search_queries_IN
     }
 
     # ----------------- Get contexts -----------------
@@ -2230,10 +2379,38 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         "按國家劃分的收入", "分部資訊", "分部收入", "區域收入"
     ]
 
+    queries_IN = [
+        # English (for bilingual filings)
+        "revenue by product",
+        "revenue by service",
+        "revenue by business segment",
+        "revenue by division",
+        "revenue by geographic region",
+        "revenue by country",
+        "revenue by area",
+        "revenue breakdown",
+        "segmental analysis",
+        "note segment information",
+
+        # Indonesian
+        "pendapatan berdasarkan produk",
+        "pendapatan berdasarkan layanan",
+        "pendapatan berdasarkan segmen usaha",
+        "pendapatan berdasarkan divisi",
+        "pendapatan berdasarkan wilayah geografis",
+        "pendapatan berdasarkan negara",
+        "pendapatan berdasarkan area",
+        "rincian pendapatan",
+        "analisis segmen",
+        "catatan informasi segmen",
+        "pendapatan per segmen", "pendapatan per wilayah", "pendapatan per divisi",
+    ]
+
     QUERY_MAP = {
         Lang.EN: queries_EN,
         Lang.ZH_SIM: queries_ZH_SIM,
-        Lang.ZH_TR: queries_ZH_TR
+        Lang.ZH_TR: queries_ZH_TR,
+        Lang.IN: queries_IN
     }
 
     # ------------------------------------------------------
@@ -2275,6 +2452,7 @@ def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
         b) Revenue by geographic markets/regions note (explicit revenue by region).
         c) MD&A tables that clearly list revenue by product/service or by region.
         Ignore: orders/backlog/bookings/pipeline; EBIT/EBITDA/profit by segment; guidance; non-GAAP.
+        d) You MUST output in ENGLISH. 
 
         2) Exact-copy numerics:
         • Keep currency symbols (£/$/€/¥/CNY/RMB/¥, etc.), unit suffixes (m, bn, billion, 百萬元, 億元), commas, decimals, parentheses.
@@ -3084,8 +3262,24 @@ def extract_s3_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "市場份額資料 競爭分析 行業排名",
             "市場動態 競爭環境 行業地位"
         ]
-    
-    
+        
+    elif TARGET_LANGUAGE == Lang.IN:
+        business_and_market_queries = [
+            # English (for bilingual filings)
+            "business model", "market position", "competitive advantage", "business segments",
+            "value creation", "revenue streams", "profit generation", "market share analysis",
+            "industry position", "competitive landscape", "market dynamics",
+
+            # Indonesian
+            "model bisnis", "posisi pasar", "strategi bisnis", "segmen bisnis utama",
+            "sumber pendapatan", "arus pendapatan", "penciptaan nilai",
+            "kerangka bisnis", "pendekatan bisnis", "model operasional",
+            "strategi monetisasi", "keunggulan kompetitif", "kepemimpinan pasar",
+            "posisi industri", "dominasi pasar", "analisis segmen pasar",
+            "pesaing utama", "analisis persaingan", "lingkungan kompetitif",
+            "pemosisian kompetitif", "pangkat industri", "peta persaingan",
+        ]
+        
     context_2024 = retrieve_relevant_text(business_and_market_queries, top_k, md_file_2024)
     context_2023 = retrieve_relevant_text(business_and_market_queries, top_k, md_file_2023)
 
@@ -3171,6 +3365,22 @@ def extract_s4_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "金融敞口 金融工具 貨幣對沖",
             "監管環境 法律合規 法定要求",
             "風險和不確定性 前瞻性陳述 風險評估"
+        ]
+        
+    elif TARGET_LANGUAGE == Lang.IN:
+        risk_queries = [
+            # English
+            "market risks", "operational risks", "financial risks", "compliance risks",
+            "enterprise risk", "principal risks", "business continuity", "regulatory environment",
+            "risks and uncertainties", "risk management framework",
+            # Indonesian
+            "risiko pasar", "risiko operasional", "risiko keuangan", "risiko kepatuhan",
+            "risiko kredit", "risiko likuiditas", "risiko suku bunga", "risiko nilai tukar",
+            "risiko bisnis", "risiko strategis", "risiko hukum", "risiko regulasi",
+            "faktor risiko", "manajemen risiko", "pengendalian risiko", "paparan keuangan",
+            "instrumen keuangan", "perlindungan mata uang", "lingkungan regulasi",
+            "kepatuhan hukum", "risiko dan ketidakpastian", "pernyataan berwawasan ke depan",
+            "rantai pasokan", "gangguan operasional", "kelangsungan bisnis",
         ]
     
     # Search and get context for 2024
@@ -3393,6 +3603,22 @@ def extract_s5_1(md_file_2024: str, top_k: int = 15, model: str = "gpt-4o-mini")
             "公司治理 董事會結構"
         ]
     
+    elif TARGET_LANGUAGE == Lang.IN:
+        board_queries = [
+            # English (for bilingual filings)
+            "board composition", "board members", "directors", "executive management",
+            "executive compensation", "director remuneration", "corporate governance",
+            "senior management", "leadership team", "key management personnel",
+
+            # Indonesian
+            "komposisi dewan", "anggota dewan", "dewan direksi", "dewan komisaris",
+            "manajemen eksekutif", "manajemen senior", "tim manajemen puncak",
+            "kompensasi eksekutif", "remunerasi direksi", "gaji eksekutif",
+            "tunjangan direksi", "penghasilan manajemen", "struktur tata kelola perusahaan",
+            "tata kelola perusahaan", "ketua dewan", "presiden direktur", "CEO",
+            "anggota manajemen kunci", "tim kepemimpinan", "struktur dewan",
+        ]
+    
     # Search and get context for 2024 only
     print("🔍 Searching for Board Composition information in 2024 report...")
     context_2024 = retrieve_relevant_text(board_queries, top_k, md_file_2024)
@@ -3608,6 +3834,24 @@ def extract_s5_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "控制環境 風險評估 控制監督",
             "內控評價 控制測試 控制設計"
         ]
+        
+    elif TARGET_LANGUAGE == Lang.IN:
+        # Hybrid Indonesian + Malay (for bilingual Southeast Asian filings)
+        internal_controls_queries = [
+            # English (for bilingual filings)
+            "internal controls", "risk management framework", "internal audit", "control environment",
+            "monitoring mechanisms", "risk assessment procedures", "control activities",
+            "audit committee", "risk committee", "governance and control effectiveness",
+
+            # Indonesian
+            "pengendalian internal", "sistem pengendalian internal", "kerangka manajemen risiko",
+            "lingkungan pengendalian", "prosedur penilaian risiko", "aktivitas pengendalian",
+            "pemantauan pengendalian", "pengujian pengendalian", "evaluasi pengendalian",
+            "komite audit", "komite risiko", "pengawasan internal", "audit internal",
+            "tata kelola perusahaan", "kelemahan material", "efektivitas pengendalian",
+            "kekurangan pengendalian", "pengendalian dan kepatuhan", "pengendalian operasional",
+        ]
+            
     
     # Search and get context for 2024
     print("🔍 Searching for Internal Controls information in 2024 report...")
@@ -3843,6 +4087,25 @@ def extract_s6_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "投資策略 收購策略 創新策略"
         ]
     
+    elif TARGET_LANGUAGE == Lang.IN:
+        # Hybrid Indonesian + Malay (for bilingual Southeast Asian filings)
+        strategic_queries = [
+            # English (for bilingual filings)
+            "strategic direction", "strategic priorities", "strategic focus", "business strategy",
+            "mergers acquisitions M&A", "new technologies", "organizational restructuring",
+            "innovation strategy", "growth strategy", "future strategy",
+            "technology development", "R&D research innovation programs",
+            "strategic outlook", "future plans", "investment strategy",
+
+            # Indonesian
+            "arah strategis", "prioritas strategis", "fokus strategis", "strategi bisnis",
+            "merger akuisisi", "M&A", "akuisisi perusahaan", "restrukturisasi organisasi",
+            "inovasi teknologi", "pengembangan teknologi", "penelitian dan pengembangan",
+            "manajemen talenta", "pengembangan tenaga kerja", "inisiatif strategis",
+            "tujuan strategis", "sasaran strategis", "rencana masa depan",
+            "strategi pertumbuhan", "ekspansi bisnis", "investasi strategis",
+            "pengembangan produk", "restrukturisasi korporasi", "tata kelola strategis",
+        ]
     # Search and get context for 2024
     print("🔍 Searching for Strategic Direction information in 2024 report...")
     context_2024 = retrieve_relevant_text(strategic_queries, top_k, md_file_2024)
@@ -4040,7 +4303,26 @@ def extract_s6_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "經濟逆風 經濟風險 財務壓力",
             "顛覆性技術 新進入者 市場顛覆"
         ]
-    
+        
+    elif TARGET_LANGUAGE == Lang.IN:
+        # Hybrid Indonesian + Malay (for bilingual Southeast Asian filings)
+        challenges_queries = [
+            # English (for bilingual filings)
+            "economic challenges", "competitive challenges", "market challenges",
+            "business uncertainties", "industry risks", "economic headwinds",
+            "market volatility", "competitive landscape", "inflation pressure", "disruptive technologies",
+
+            # Indonesian
+            "tantangan ekonomi", "tekanan inflasi", "resesi ekonomi", "perilaku konsumen",
+            "ketidakpastian ekonomi", "kondisi ekonomi", "volatilitas pasar",
+            "tekanan kompetitif", "persaingan pasar", "tantangan kompetitif",
+            "ancaman kompetitif", "lingkungan kompetitif", "analisis pesaing",
+            "tantangan industri", "tantangan bisnis", "tantangan pasar",
+            "risiko ekonomi", "hambatan ekonomi", "dampak ekonomi",
+            "teknologi disruptif", "pendatang baru", "gangguan pasar",
+            "ketidakpastian bisnis", "tantangan strategis",
+        ]
+        
     # Search and get context for 2024
     print("🔍 Searching for Challenges and Uncertainties information in 2024 report...")
     context_2024 = retrieve_relevant_text(challenges_queries, top_k, md_file_2024)
@@ -4231,6 +4513,23 @@ def extract_s6_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
             "創新項目 技術開發 產品差異化",
             "新解決方案 市場趨勢 技術解決方案",
             "產品組合 創新能力 技術重點"
+        ]
+        
+    elif TARGET_LANGUAGE == Lang.IN:
+        innovation_queries = [
+            # English (for bilingual filings)
+            "R&D investments", "research and development", "innovation strategy", "technology advancement",
+            "new product launches", "product innovation", "innovation initiatives",
+            "technology development", "R&D expenditure", "innovation roadmap",
+
+            # Indonesian
+            "investasi penelitian dan pengembangan", "investasi R&D", "inovasi teknologi", "pengembangan teknologi",
+            "penelitian dan pengembangan", "riset dan pengembangan", "pengeluaran R&D", "biaya penelitian dan pengembangan",
+            "peluncuran produk baru", "pengembangan produk", "inovasi produk", "rencana inovasi",
+            "program inovasi", "inisiatif inovasi", "peta jalan teknologi", "pengembangan produk baru",
+            "kemajuan teknologi", "peningkatan produk", "strategi inovasi",
+            "kapabilitas inovasi", "fokus teknologi", "pengembangan diferensiasi produk",
+            "solusi baru", "tren pasar", "solusi teknologi",
         ]
     
     # Search and get context for 2024
@@ -5005,7 +5304,7 @@ if __name__ == "__main__":
         target_lang = Lang.ZH_SIM
     elif out_lang == "ZH_TR":
         target_lang = Lang.ZH_TR
-    elif out_lang == "EN":
+    elif out_lang == "EN" or out_lang == "IN":
         target_lang = Lang.EN
     else: 
         raise ValueError(f"Unsupported output language: {args.output_language}. Supported languages are: ZH_SIM, ZH_TR, EN.")

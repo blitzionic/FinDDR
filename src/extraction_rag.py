@@ -249,7 +249,231 @@ def to_zh_multiplier(mult: str, trad: bool = False) -> str:
 def to_zh_labels(currency_code: str, multiplier_label: str, trad: bool = False) -> Tuple[str, str]:
     return to_zh_currency(currency_code, trad), to_zh_multiplier(multiplier_label, trad)
 
-   
+
+def to_float(value):
+    if value in (None, "", "N/A", "-", "--", "—"):
+        return None
+    try:
+        s = str(value).strip()
+        # strip currency & spaces
+        if s and s[0] in "$€£¥":
+            s = s[1:].strip()
+        s = s.replace(",", "").replace("\xa0", "").strip()
+        # parentheses -> negative
+        if s.startswith("(") and s.endswith(")"):
+            s = "-" + s[1:-1]
+        return float(s)
+    except Exception:
+        return None
+
+def fill_income_data(income_data):
+    def fmt(v):
+        if v is None:
+            return "N/A"
+        out = f"{abs(v):,.1f}".rstrip("0").rstrip(".")
+        return f"({out})" if v < 0 else out
+
+
+    def safe_set(d, key, value):
+        """
+        Only update d[key] if it's truly empty.
+        Prevents overwriting fallback or pre-filled values.
+        """
+        if d.get(key) in (None, "", "N/A", "-", "--", "—"):
+            d[key] = value
+
+
+    def fill_year(d):
+        # read parsed values
+        rev    = to_float(d.get("revenue"))
+        cogs   = to_float(d.get("cost_of_goods_sold"))   # expense (may be negative)
+        gp     = to_float(d.get("gross_profit"))
+        opex   = to_float(d.get("operating_expense"))    # expense (may be negative)
+        oi     = to_float(d.get("operating_income"))
+        net    = to_float(d.get("net_profit"))
+        pretax = to_float(d.get("income_before_taxes"))
+        tax    = to_float(d.get("tax_expense"))          # expense (may be negative)
+
+        # --- Revenue, COGS, Gross Profit ---
+        if gp is None and rev is not None and cogs is not None:
+            gp = rev - abs(cogs)
+            safe_set(d, "gross_profit", fmt(gp))
+
+        if cogs is None and rev is not None and gp is not None:
+            cogs = -(rev - gp)  # keep as negative
+            safe_set(d, "cost_of_goods_sold", fmt(cogs))
+
+        if rev is None and gp is not None and cogs is not None:
+            rev = gp + abs(cogs)
+            safe_set(d, "revenue", fmt(rev))
+
+        # --- Operating Income, Operating Expense, Gross Profit ---
+        if oi is None and gp is not None and opex is not None:
+            oi = gp - abs(opex)
+            safe_set(d, "operating_income", fmt(oi))
+
+        if opex is None and gp is not None and oi is not None:
+            opex = -(gp - oi)
+            safe_set(d, "operating_expense", fmt(opex))
+
+        if gp is None and oi is not None and opex is not None:
+            gp = oi + abs(opex)
+            safe_set(d, "gross_profit", fmt(gp))
+
+        # --- Net, Pretax, Tax (tax is an expense) ---
+        if net is None and pretax is not None and tax is not None:
+            net = pretax - abs(tax)
+            safe_set(d, "net_profit", fmt(net))
+
+        if pretax is None and net is not None and tax is not None:
+            pretax = net + abs(tax)
+            safe_set(d, "income_before_taxes", fmt(pretax))
+
+        if tax is None and pretax is not None and net is not None:
+            tax = -(pretax - net)
+            safe_set(d, "tax_expense", fmt(tax))
+
+    years = ("2024", "2023", "2022")
+    
+    for _ in range(2):
+        for y in years:
+            if y in income_data:
+                fill_year(income_data[y])
+    return income_data
+
+
+def fill_missing_balance_sheet_values(balance_data):
+    """
+    Fill missing balance sheet values using standard identities without overwriting
+    existing non-missing values.
+
+    Works per year independently. Equations used:
+      1) total_assets = current_assets + non_current_assets
+         ↔ current_assets = total_assets - non_current_assets
+         ↔ non_current_assets = total_assets - current_assets
+      2) total_liabilities = current_liabilities + non_current_liabilities
+         ↔ current_liabilities = total_liabilities - non_current_liabilities
+         ↔ non_current_liabilities = total_liabilities - current_liabilities
+      3) accounting equation: total_assets = total_liabilities + shareholders_equity
+         ↔ shareholders_equity = total_assets - total_liabilities
+         ↔ total_liabilities = total_assets - shareholders_equity
+      4) total_equity_and_liabilities = total_assets (identity)
+
+    Only fills values that are missing in balance_data[year][field].
+    Does NOT overwrite existing non-missing strings.
+    """
+
+    def is_missing(v):
+        return v in (None, "", "N/A", "-", "--")
+
+    def to_float(v):
+        if is_missing(v):
+            return None
+        s = str(v).strip().replace("\xa0", "").replace(" ", "")
+        # Strip leading currency symbol
+        if s and s[0] in ("£", "$", "€", "¥"):
+            s = s[1:]
+        # Handle parentheses for negatives
+        neg = s.startswith("(") and s.endswith(")")
+        if neg:
+            s = s[1:-1]
+        # Normalize thousands/decimal (supports "17.102.428", "36,072.95", "1.234.567,89")
+        has_dot, has_comma = "." in s, "," in s
+        try:
+            if has_dot and has_comma:
+                # Decide decimal by last separator
+                if s.rfind(".") > s.rfind(","):
+                    s = s.replace(",", "")
+                else:
+                    s = s.replace(".", "").replace(",", ".")
+            elif has_dot and s.count(".") > 1:
+                s = s.replace(".", "")
+            elif has_comma and s.count(",") > 1:
+                s = s.replace(",", "")
+            else:
+                s = s.replace(",", ".")
+            val = float(s)
+            return -val if neg else val
+        except Exception:
+            return None
+
+    def fmt(v):
+        if v is None:
+            return "N/A"
+        # Balance sheet lines are usually non-negative, but keep parentheses if negative appears.
+        return f"({abs(v):,.1f})" if v < 0 else f"{v:,.1f}"
+
+    # Fields we might compute
+    F = {
+        "TA": "total_assets",
+        "CA": "current_assets",
+        "NCA": "non_current_assets",
+        "TL": "total_liabilities",
+        "CL": "current_liabilities",
+        "NCL": "non_current_liabilities",
+        "SE": "shareholders_equity",
+        "TEL": "total_equity_and_liabilities",
+    }
+
+    years = [y for y in ("2024", "2023", "2022") if y in balance_data]
+
+    for year in years:
+        # We’ll iterate until a full pass makes no changes
+        changed = True
+        while changed:
+            changed = False
+
+            row = balance_data.get(year, {})
+            # Parse current numeric values
+            vals = {k: to_float(row.get(v)) for k, v in F.items()}
+
+            # 1) Assets split
+            # TA = CA + NCA
+            if vals["TA"] is None and vals["CA"] is not None and vals["NCA"] is not None:
+                row[F["TA"]] = fmt(vals["CA"] + vals["NCA"]); changed = True
+            if vals["CA"] is None and vals["TA"] is not None and vals["NCA"] is not None:
+                row[F["CA"]] = fmt(vals["TA"] - vals["NCA"]); changed = True
+            if vals["NCA"] is None and vals["TA"] is not None and vals["CA"] is not None:
+                row[F["NCA"]] = fmt(vals["TA"] - vals["CA"]); changed = True
+
+            # Refresh after possible writes
+            vals = {k: to_float(row.get(v)) for k, v in F.items()}
+
+            # 2) Liabilities split
+            # TL = CL + NCL
+            if vals["TL"] is None and vals["CL"] is not None and vals["NCL"] is not None:
+                row[F["TL"]] = fmt(vals["CL"] + vals["NCL"]); changed = True
+            if vals["CL"] is None and vals["TL"] is not None and vals["NCL"] is not None:
+                row[F["CL"]] = fmt(vals["TL"] - vals["NCL"]); changed = True
+            if vals["NCL"] is None and vals["TL"] is not None and vals["CL"] is not None:
+                row[F["NCL"]] = fmt(vals["TL"] - vals["CL"]); changed = True
+
+            # Refresh again
+            vals = {k: to_float(row.get(v)) for k, v in F.items()}
+
+            # 3) Accounting equation: TA = TL + SE
+            if vals["TA"] is None and vals["TL"] is not None and vals["SE"] is not None:
+                row[F["TA"]] = fmt(vals["TL"] + vals["SE"]); changed = True
+            if vals["SE"] is None and vals["TA"] is not None and vals["TL"] is not None:
+                row[F["SE"]] = fmt(vals["TA"] - vals["TL"]); changed = True
+            if vals["TL"] is None and vals["TA"] is not None and vals["SE"] is not None:
+                row[F["TL"]] = fmt(vals["TA"] - vals["SE"]); changed = True
+
+            # Refresh again
+            vals = {k: to_float(row.get(v)) for k, v in F.items()}
+
+            # 4) Total Equity & Liabilities = Total Assets
+            if is_missing(row.get(F["TEL"])) and vals["TA"] is not None:
+                row[F["TEL"]] = fmt(vals["TA"]); changed = True
+            if is_missing(row.get(F["TA"])) and vals["TEL"] is not None:
+                row[F["TA"]] = fmt(vals["TEL"]); changed = True
+
+        # Done with this year; write back
+        balance_data[year] = row
+
+    return balance_data
+
+
 # ===================== S1.1: Basic Information with FAISS Search =====================
 
 def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini"):
@@ -591,7 +815,7 @@ def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=1200
+            max_tokens=900
         )
         content = response.choices[0].message.content
         
@@ -747,68 +971,20 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
         }
 
 # ===================== Section 2: Financial Statements with FAISS Search =====================
-
-def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = "gpt-4.1-mini"):
-    """
-    Extract financial statements using FAISS search for specific statement types.
-    """
     
-    search_queries_EN = [
-        "income statement", "profit and loss", "P&L statement",
-        "revenue", "gross profit", "sales", "cost of goods sold",
-        "operating expenses", "operating income", "net profit net income",
-        "income before taxes", "tax expense", "interest expense",
-        "consolidated income statement", "statement of comprehensive income"
-    ]
+def build_s2_1_prompt(context: str, year) -> str:
     
-    search_queries_ZH_SIM = [
-        "利润表", "损益表", "收入报表",
-        "营业收入 收入", "营业成本 销售成本", "毛利润",
-        "营业费用", "营业利润", "净利润",
-        "税前利润", "所得税费用", "利息费用",
-        "合并利润表", "综合收益表"
-    ]
-    
-    search_queries_ZH_TR = [
-        "利潤表", "損益表", "收入報表",
-        "營業收入 收入", "營業成本 銷售成本", "毛利潤",
-        "營業費用", "營業利潤", "淨利潤",
-        "稅前利潤", "所得稅費用", "利息費用",
-        "合併利潤表", "綜合收益表"
-    ]
-    
-    QUERY_MAP = {
-        Lang.EN: search_queries_EN,
-        Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR
-    }
-
-    context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
-    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
-    
-    combined_context = f"""
-    === 2024 FINANCIAL DATA ===
-    {context_2024}
-    
-    === 2023 FINANCIAL DATA ===
-    {context_2023}
-    """
-    
-    # print(combined_context)
-    
-    if(len(combined_context) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    
-    # print(combined_context)
+    if year == 2024:
+        years_instruction = "2024, 2023, 2022"
+    else:
+        years_instruction = "2023, 2022"
     
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
-        You are extracting income statement data from annual reports for 2024, 2023, and 2022.
+        You are extracting CONSOLIDATED income statement data from a {year} annual report.
+        The report may contain data for multiple years: {years_instruction}.
         You are extracting the CONSOLIDATED income statement (Consolidated Income Statement) 
+        **You can compute values if sub-items correspond to one target item (e.g. sum of different costs of goods sold = Cost of Goods Sold), you MAY compute their sum**
         
         Look for these specific financial statement items for each year:
         - Revenue/Sales/Turnover
@@ -822,13 +998,14 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - Interest expense/Finance costs
         
         RULES: 
-        - Extract ONLY the numerical values and the multiplier
         - If a value is in parentheses or marked as negative, do not change
-        - If data is not available for a specific year, use "N/A"
-        - DO NOT COMPUTE any values, DO NOT MAKE UP any values if not present in text, unless:
-                sub-items correspond to one target item (e.g. sum of different costs of goods sold = Cost of Goods Sold), 
-                you MAY compute their sum.
-        - Only do this if the sub-items clearly and exclusively belong to that category.
+        - If data is NOT AVAILIBLE for a specific year, use "N/A"
+        - **DO NOT MAKE UP OR GUESS VALUES - If data is not in the document, use "N/A"**
+        - Calculate missing values ONLY if ALL necessary sub-items are present 
+        - CHECK YOUR CALCULATIONS EXTREMELY CAREFULLY
+        - **CRITICAL: ALL values must use the SAME multiplier from the statement header**
+        (e.g., if header says "in Millions", extract all values in millions - do NOT convert)
+        - **VERIFY: All extracted values should be in similar magnitude**
         - Use the same multiplier and currency as the section header.
         - DO NOT ROUND numbers - keep original precision
         
@@ -880,47 +1057,43 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - Identify the currency from the financial statements
         - Be precise with the exact values shown in the statements
         
-        FINANCIAL DATA:
-        {combined_context}
+        FINANCIAL DATA from {year} ANNUAL REPORT:
+        {context}
         """
     
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
         prompt = f"""
-        你是一名财务数据抽取专家，负责从公司年度报告中提取【合并利润表】（Consolidated Income Statement / 合併損益表）的数据，
+        你是一名财务数据抽取专家，负责从 {year} 年度报告中提取【合并利润表】数据。
         涵盖 2024、2023 和 2022 年度。
 
         请根据以下要求，从文本中提取各年度的财务项目：
 
-        - 营业收入 / 销售收入 / 营业总收入（Revenue / Sales / Turnover）
-        - 营业成本 / 销售成本（Cost of Goods Sold / Cost of Sales）
-        - 毛利 / 毛利润（Gross Profit）
-        - 营业费用（包括销售费用、管理费用、研发费用）（Operating Expenses / Operating Costs）
-        - 营业利润（Operating Income / Operating Profit）
-        - 净利润（Net Profit / Net Income）
-        - 利润总额 / 税前利润（Income Before Taxes / Profit Before Tax）
-        - 所得税费用（Tax Expense / Income Tax）
-        - 利息费用 / 财务费用（Interest Expense / Finance Costs）
+        请提取以下项目（每一年度）：
+        - 营业收入/销售收入 (Revenue/Sales)
+        - 营业成本/销售成本 (Cost of Goods Sold)
+        - 毛利润 (Gross Profit)
+        - 营业费用 (Operating Expenses)
+        - 营业利润 (Operating Income)
+        - 净利润 (Net Profit)
+        - 税前利润 (Income Before Taxes)
+        - 所得税费用 (Tax Expense)
+        - 利息费用 (Interest Expense)
 
         提取规则：
-        - 年报中通常包含 2–3 年的对比数据，请分别提取每一年的数值。
-        - 仅提取纯数字数值，不要包含货币符号或单位（例如提取 "150.5"，不要提取 "¥150.5 百万元"）。
-        - 如果数据以括号或负号表示为负值，请保留括号或负号。
-        - 如果某个项目在文本中不存在，请返回 "N/A"。
-        - 不要自行计算或推导数值；只使用文本中明确出现的数值。
-        - 不要四舍五入；保留原始精度。
-        - 优先选择“合并利润表”（含“合并”或“Consolidated”字样），忽略“母公司利润表”或“Parent Company Income Statement”。
-        - 请直接照抄报表中出现的数值，不得进行单位换算或缩放。
-        - 若表中出现「单位：千元」、「单位：万元」等文字，仅需识别该单位以填写 multiplier 字段，但不得改变数值。
-        - 例如：
-            * 若表中显示「362,012,554」且单位为「千元」，请输出 "362,012,554" 并将 multiplier 设为 "Thousands"。
-            * 若表中显示「40,091,704」且单位为「万元」，请仍输出 "40,091,704"，不要进行任何单位换算。
-        - 始终以英文单位返回 multiplier，不得输出中文单位（如 “万元”、“百万元” 等）。
-        - 货币类型请标准化为三位字母代码（如 CNY, USD, GBP, EUR 等）。
-        - 如果报表中缺少某年度的数值，请不要推测或估算，直接输出 "N/A"。
-
-        输出要求：
+        - 只提取纯数字，不含货币符号或单位
+        - 若数值以括号或负号表示负值，请保持原样不变（如 (1000) 或 -1000）
+        - 不存在的数据填 "N/A"
+        - 仅当所有必要的子项目都存在时，才可以计算缺失值
+        - 请仔细检查您的计算
+        - **关键：所有数值必须使用报表标题中标注的同一倍率单位**
+        （例如：若标题为"单位：百万元"，则所有数值都应为百万元 - 不得转换单位）
+        - **验证：所有提取的数值应该在相似的数量级（如都在 10,000-30,000 范围，如果单位是百万）**
+        - 不要四舍五入，保留原始精度
+        - 仅从"合并利润表"提取
+        - 识别倍率单位（千->Thousands, 百万->Millions, 十亿->Billions）填入 multiplier
+        **警告：如果源文档中找不到某年度的数据，该年度的所有项目必须填 N/A。
+                
         请严格返回以下 JSON 结构：
-
         {{
         "2024": {{
             "revenue": "数值或 N/A",
@@ -955,7 +1128,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
             "tax_expense": "数值或 N/A",
             "interest_expense": "数值或 N/A"
         }},
-        "multiplier": "抄写报表中出现的单位，仅限以下之一：千万->Thousands / Millions / Billions",
+        "multiplier": "抄写报表中出现的单位，仅限以下之一：千万->Thousands / Millions / Billions（英文）",
         "currency": "根据上下文判断：CNY / USD / GBP / EUR 等"
         }}
 
@@ -967,13 +1140,13 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - 请确保提取结果与表中出现的“合并利润表”数值一致。
 
         财务数据文本如下：
-        {combined_context}
+        {context}
     """
 
     elif TARGET_LANGUAGE == Lang.ZH_TR:
         prompt = f"""
-        你是一位財務資料擷取專家，負責從公司年度報告中提取【合併損益表】（Consolidated Income Statement / 合併利益表）的資料，
-        涵蓋 2024、2023 和 2022 年度。
+        你是一位財務資料擷取專家，負責從 {year} 年度報告中提取【合併損益表】（Consolidated Income Statement / 合併利益表）的資料。
+        該報告可能包含多年對比資料：{years_instruction}。
 
         請依照以下指示，從文本中擷取各年度的財務項目：
 
@@ -988,20 +1161,22 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - 利息費用／財務費用（Interest Expense / Finance Costs）
 
         擷取規則：
-        - 年報通常包含 2～3 年的對比資料，請分別擷取每一年度的數值。
-        - 只擷取純數字，不得包含貨幣符號或單位（例如擷取 "150.5"，不要擷取 "¥150.5 百萬元"）。
-        - 若數值以括號或負號表示為負值，請保留括號或負號。
-        - 若某項目在文本中不存在，請返回 "N/A"。
-        - 不得自行計算、估算或推導數值，只能使用文本中明確出現的數據。
-        - 不得四捨五入，必須保留原始精度。
-        - 優先選擇「合併損益表」（包含「合併」或「Consolidated」字樣），忽略「母公司損益表」或「Parent Company Income Statement」。
-        - 根據上下文判斷計量單位與貨幣，並統一輸出為英文格式：
-            * 若出現「單位：千元」→ multiplier = "Thousands"
-            * 若出現「單位：萬元」→ multiplier = "Ten-Thousands"（但建議換算為 Thousands）
-            * 若出現「單位：百萬元」或「單位：百萬」→ multiplier = "Millions"
-            * 若出現「單位：億元」或「單位：十億」→ multiplier = "Billions"
-        - 輸出的 multiplier 必須使用英文標準格式（Thousands / Millions / Billions），不得包含中文單位（如「萬元」、「百萬元」等）。
-        - 依據文本標註的貨幣（人民幣／CNY／USD／GBP／EUR/HKD 等）輸出 currency，並使用標準三位字母代碼。
+        - 請分別擷取每一年度的數值
+        - 只擷取純數字，不得包含貨幣符號或單位
+        - 若數值以括號或負號表示負值，請保持原樣不變（如 (1000) 或 -1000）
+        - 若某項目在文本中不存在，請返回 "N/A"
+        - 僅當所有必要的子項目都存在時，才可計算缺失值
+        - 請仔細檢查您的計算
+        - **關鍵：所有數值必須使用報表標題中標註的同一倍率單位**
+        （例如：若標題為「單位：百萬元」，則所有數值都應為百萬元 - 不得轉換單位）
+        - 不得四捨五入，必須保留原始精度
+        - **驗證：所有擷取的數值應該在相似的數量級（如都在 10,000-30,000 範圍，若單位是百萬）**
+        - 優先選擇「合併損益表」（包含「合併」或「Consolidated」字樣），忽略「母公司損益表」
+        - 識別計量單位並輸出為英文格式（千->Thousands, 百萬->Millions, 十億->Billions）
+        - multiplier 必須使用英文標準格式（Thousands/Millions/Billions）
+        - 貨幣使用標準三位字母代碼（CNY/USD/GBP/EUR/HKD 等）
+        **警告：如果來源文件中找不到某年度的資料，該年度的所有項目必須填 N/A。
+        禁止外推、估算或創造資料。**
 
         輸出要求：
         請嚴格返回以下 JSON 結構：
@@ -1041,7 +1216,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
             "interest_expense": "數值或 N/A"
         }},
         "multiplier": "根據上下文判斷：Thousands / Millions / Billions",
-        "currency": "根據上下文判斷：CNY / USD / GBP / EUR 等"
+        "currency": "根據上下文判斷：CNY / HKD / USD / GBP / EUR 等"
         }}
 
         說明：
@@ -1052,69 +1227,185 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - 請確保所擷取的數值來自「合併損益表」而非「母公司損益表」。
 
         財務資料如下：
-        {combined_context}
+        {context}
         """
+    return prompt
+        
+def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = "gpt-4.1-mini"):
+    """
+    Extract financial statements using FAISS search for specific statement types.
+    """
+    
+    search_queries_EN = [
+        "income statement", "profit and loss", "P&L statement",
+        "revenue", "financial highlights", "gross profit", "sales", "cost of goods sold",
+        "operating expenses", "operating income", "net profit net income",
+        "income before taxes", "tax expense", "interest expense", "financial year end"
+        "consolidated income statement", "statement of comprehensive income"
+    ]
+    
+    search_queries_ZH_SIM = [
+        "利润表", "损益表", "收入报表",
+        "营业收入 收入", "营业成本 销售成本", "毛利润",
+        "营业费用", "营业利润", "净利润",
+        "税前利润", "所得税费用", "利息费用",
+        "合并利润表", "综合收益表"
+    ]
+    
+    search_queries_ZH_TR = [
+        "利潤表", "損益表", "收入報表",
+        "營業收入 收入", "營業成本 銷售成本", "毛利潤",
+        "營業費用", "營業利潤", "淨利潤",
+        "稅前利潤", "所得稅費用", "利息費用",
+        "合併利潤表", "綜合收益表"
+    ]
+    
+    QUERY_MAP = {
+        Lang.EN: search_queries_EN,
+        Lang.ZH_SIM: search_queries_ZH_SIM,
+        Lang.ZH_TR: search_queries_ZH_TR
+    }
+
+    context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
+    prompt_2024 = build_s2_1_prompt(context_2024, year=2024)
+    
+    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
+    prompt_2023 = build_s2_1_prompt(context_2023, year=2023)
+
+    if(len(context_2024) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+    
+    if(len(context_2023) > 350_000):
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        print(f"[WARN] Context length {len(context_2024)} exceeds 350_000 characters, truncating.")
+        print(f"===========================================================================")
+        print(f"===========================================================================")
+        
+    #print(context_2024)
+    #print("----------------------\n\n\n\n\n\n")
+    #print(context_2023)
+    
+    result_2024 = None
+    result_2023 = None
 
     try:
-        response = client.chat.completions.create(
+        response_2024 = client.chat.completions.create(
             model=model,
+            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from financial statements. Return valid JSON only."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt_2024}
             ],
             temperature=0,
             max_tokens=2000
         )
-        # print(response.choices[0].message.content)
-        result = _safe_json_from_llm(response.choices[0].message.content)
-        
-        # print(f"DEBUG - Income statement extraction result: {result}")
-        
-        data_2024 = result.get("2024", {})
-        data_2023 = result.get("2023", {})
-        data_2022 = result.get("2022", {})
-        
-        return {
-            "2024": {
-                "revenue": _normalize_na(data_2024.get("revenue", "N/A")),
-                "cost_of_goods_sold": _normalize_na(data_2024.get("cost_of_goods_sold", "N/A")),
-                "gross_profit": _normalize_na(data_2024.get("gross_profit", "N/A")),
-                "operating_expense": _normalize_na(data_2024.get("operating_expense", "N/A")),
-                "operating_income": _normalize_na(data_2024.get("operating_income", "N/A")),
-                "net_profit": _normalize_na(data_2024.get("net_profit", "N/A")),
-                "income_before_taxes": _normalize_na(data_2024.get("income_before_taxes", "N/A")),
-                "tax_expense": _normalize_na(data_2024.get("tax_expense", "N/A")),
-                "interest_expense": _normalize_na(data_2024.get("interest_expense", "N/A"))
-            },
-            "2023": {
-                "revenue": _normalize_na(data_2023.get("revenue", "N/A")),
-                "cost_of_goods_sold": _normalize_na(data_2023.get("cost_of_goods_sold", "N/A")),
-                "gross_profit": _normalize_na(data_2023.get("gross_profit", "N/A")),
-                "operating_expense": _normalize_na(data_2023.get("operating_expense", "N/A")),
-                "operating_income": _normalize_na(data_2023.get("operating_income", "N/A")),
-                "net_profit": _normalize_na(data_2023.get("net_profit", "N/A")),
-                "income_before_taxes": _normalize_na(data_2023.get("income_before_taxes", "N/A")),
-                "tax_expense": _normalize_na(data_2023.get("tax_expense", "N/A")),
-                "interest_expense": _normalize_na(data_2023.get("interest_expense", "N/A"))
-            },
-            "2022": {
-                "revenue": _normalize_na(data_2022.get("revenue", "N/A")),
-                "cost_of_goods_sold": _normalize_na(data_2022.get("cost_of_goods_sold", "N/A")),
-                "gross_profit": _normalize_na(data_2022.get("gross_profit", "N/A")),
-                "operating_expense": _normalize_na(data_2022.get("operating_expense", "N/A")),
-                "operating_income": _normalize_na(data_2022.get("operating_income", "N/A")),
-                "net_profit": _normalize_na(data_2022.get("net_profit", "N/A")),
-                "income_before_taxes": _normalize_na(data_2022.get("income_before_taxes", "N/A")),
-                "tax_expense": _normalize_na(data_2022.get("tax_expense", "N/A")),
-                "interest_expense": _normalize_na(data_2022.get("interest_expense", "N/A"))
-            },
-            "multiplier": _normalize_na(result.get("multiplier", "Units")),
-            "currency": _normalize_na(result.get("currency", "USD"))
-        }
-        
-        
+        result_2024 = _safe_json_from_llm(response_2024.choices[0].message.content)
+        print(f"✓ Successfully extracted from 2024 report")
     except Exception as e:
-        print(f"Error extract_s2_1_income_statement: {e}")
+        print(f"✗ Error extracting from 2024 report: {e}")
+        result_2024 = {}
+    print(result_2024)
+    try:
+        response_2023 = client.chat.completions.create(
+            model=model,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from financial statements. Return valid JSON only."},
+                {"role": "user", "content": prompt_2023}
+            ],
+            temperature=0,
+            max_tokens=2000
+        )
+        result_2023 = _safe_json_from_llm(response_2023.choices[0].message.content)
+        print(f"✓ Successfully extracted from 2023 report")
+    except Exception as e:
+        print(f"✗ Error extracting from 2023 report: {e}")
+        result_2023 = {}
+    print(result_2023)
+        
+    def _merge_year_data(primary_data, fallback_data):
+        """
+        Merge year data field-by-field.
+        Use primary if value is not N/A, otherwise use fallback.
+        """
+        if not primary_data:
+            return fallback_data or {}
+        if not fallback_data:
+            return primary_data or {}
+        
+        merged = {}
+        all_keys = set(primary_data.keys()) | set(fallback_data.keys())
+        
+        for key in all_keys:
+            primary_value = primary_data.get(key, "N/A")
+            fallback_value = fallback_data.get(key, "N/A")
+            
+            # Use primary unless it's N/A, then use fallback
+            if primary_value not in ["N/A", None, ""]:
+                merged[key] = primary_value
+            else:
+                merged[key] = fallback_value
+        
+        return merged
+
+    data_2024 = result_2024.get("2024", {}) if result_2024 else {}
+
+    # For 2023: merge 2024 report and 2023 report field-by-field
+    data_2023_from_2024 = result_2024.get("2023", {}) if result_2024 else {}
+    data_2023_from_2023 = result_2023.get("2023", {}) if result_2023 else {}
+    data_2023 = _merge_year_data(data_2023_from_2024, data_2023_from_2023)
+
+    # For 2022: merge 2024 report and 2023 report field-by-field  
+    data_2022_from_2024 = result_2024.get("2022", {}) if result_2024 else {}
+    data_2022_from_2023 = result_2023.get("2022", {}) if result_2023 else {}
+    data_2022 = _merge_year_data(data_2022_from_2024, data_2022_from_2023)    
+
+    multiplier = result_2024.get("multiplier", result_2023.get("multiplier", "Units") if result_2023 else "Units") if result_2024 else "Units"
+    currency = result_2024.get("currency", result_2023.get("currency", "USD") if result_2023 else "USD") if result_2024 else "USD"
+    
+    return {
+        "2024": {
+            "revenue": _normalize_na(data_2024.get("revenue", "N/A")),
+            "cost_of_goods_sold": _normalize_na(data_2024.get("cost_of_goods_sold", "N/A")),
+            "gross_profit": _normalize_na(data_2024.get("gross_profit", "N/A")),
+            "operating_expense": _normalize_na(data_2024.get("operating_expense", "N/A")),
+            "operating_income": _normalize_na(data_2024.get("operating_income", "N/A")),
+            "net_profit": _normalize_na(data_2024.get("net_profit", "N/A")),
+            "income_before_taxes": _normalize_na(data_2024.get("income_before_taxes", "N/A")),
+            "tax_expense": _normalize_na(data_2024.get("tax_expense", "N/A")),
+            "interest_expense": _normalize_na(data_2024.get("interest_expense", "N/A"))
+        },
+        "2023": {
+            "revenue": _normalize_na(data_2023.get("revenue", "N/A")),
+            "cost_of_goods_sold": _normalize_na(data_2023.get("cost_of_goods_sold", "N/A")),
+            "gross_profit": _normalize_na(data_2023.get("gross_profit", "N/A")),
+            "operating_expense": _normalize_na(data_2023.get("operating_expense", "N/A")),
+            "operating_income": _normalize_na(data_2023.get("operating_income", "N/A")),
+            "net_profit": _normalize_na(data_2023.get("net_profit", "N/A")),
+            "income_before_taxes": _normalize_na(data_2023.get("income_before_taxes", "N/A")),
+            "tax_expense": _normalize_na(data_2023.get("tax_expense", "N/A")),
+            "interest_expense": _normalize_na(data_2023.get("interest_expense", "N/A"))
+        },
+        "2022": {
+            "revenue": _normalize_na(data_2022.get("revenue", "N/A")),
+            "cost_of_goods_sold": _normalize_na(data_2022.get("cost_of_goods_sold", "N/A")),
+            "gross_profit": _normalize_na(data_2022.get("gross_profit", "N/A")),
+            "operating_expense": _normalize_na(data_2022.get("operating_expense", "N/A")),
+            "operating_income": _normalize_na(data_2022.get("operating_income", "N/A")),
+            "net_profit": _normalize_na(data_2022.get("net_profit", "N/A")),
+            "income_before_taxes": _normalize_na(data_2022.get("income_before_taxes", "N/A")),
+            "tax_expense": _normalize_na(data_2022.get("tax_expense", "N/A")),
+            "interest_expense": _normalize_na(data_2022.get("interest_expense", "N/A"))
+        },
+        "multiplier": _normalize_na(multiplier),
+        "currency": _normalize_na(currency)
+    }
+
 
 def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
     """
@@ -1123,10 +1414,11 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
     
     search_queries_EN = [
         "balance sheet", "statement of financial position", "consolidated balance sheet",
-        "total assets", "current assets", "non-current assets", "property plant equipment",
+        "total assets", "financial highlights", "financial results", "financial position", "current assets", 
+        "non-current assets", "property plant equipment", "bank borrowing", "investments"
         "total liabilities", "current liabilities", "non-current liabilities",
         "total equity", "shareholders equity", "stockholders equity", 
-        "retained earnings", "share capital"
+        "retained earnings", "share capital", "prepaid expenses"
     ]
     
     search_queries_ZH_SIM = [
@@ -1169,7 +1461,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         print(f"===========================================================================")
         print(f"===========================================================================")
     
-    # print(f"{len(combined_context)} {combined_context}")
+    print(f"{len(combined_context)} {combined_context}")
     
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
@@ -1188,7 +1480,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         - Retained Earnings
         - Total Equity and Liabilities (should equal Total Assets)
         - Inventories
-        - Prepaid Expenses
+        - Prepaid Expenses/Prepayments 
 
         RULES:
         - Most annual reports contain 2–3 years of comparative data; extract each year separately.
@@ -1455,6 +1747,7 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         data_2024 = result.get("2024", {})
         data_2023 = result.get("2023", {})
         data_2022 = result.get("2022", {})
+        print(result)
         
         return {
             "2024": {
@@ -4148,7 +4441,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     def checkpoint(section_label: str):
         print(f"💾 Saving partial after: {section_label}")
         save_partial_report(report, partial_path, currency_code=currency_code)
-    # ... [Initial setup code remains the same] ...
+        
     
     print("\n" + "="*60)
     print("🔄 PROCESSING: Building FAISS Embeddings")
@@ -4215,37 +4508,52 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
     
     # Use FAISS search for income statement
-    income_data = extract_s2_1(md_file_2024, md_file_2023, top_k=5, model="gpt-4.1-mini")
-    
-    report.income_statement.revenue.year_2024 = income_data["2024"]["revenue"]
-    report.income_statement.revenue.year_2023 = income_data["2023"]["revenue"]
-    report.income_statement.revenue.year_2022 = income_data["2022"]["revenue"] 
-    report.income_statement.cost_of_goods_sold.year_2024 = income_data["2024"]["cost_of_goods_sold"]
-    report.income_statement.cost_of_goods_sold.year_2023 = income_data["2023"]["cost_of_goods_sold"]
-    report.income_statement.cost_of_goods_sold.year_2022 = income_data["2022"]["cost_of_goods_sold"] 
-    report.income_statement.gross_profit.year_2024 = income_data["2024"]["gross_profit"]
-    report.income_statement.gross_profit.year_2023 = income_data["2023"]["gross_profit"]
-    report.income_statement.gross_profit.year_2022 = income_data["2022"]["gross_profit"]
-    report.income_statement.operating_expense.year_2024 = income_data["2024"]["operating_expense"]
-    report.income_statement.operating_expense.year_2023 = income_data["2023"]["operating_expense"]
-    report.income_statement.operating_expense.year_2022 = income_data["2022"]["operating_expense"]
-    report.income_statement.operating_income.year_2024 = income_data["2024"]["operating_income"]
-    report.income_statement.operating_income.year_2023 = income_data["2023"]["operating_income"]
-    report.income_statement.operating_income.year_2022 = income_data["2022"]["operating_income"]
-    report.income_statement.net_profit.year_2024 = income_data["2024"]["net_profit"]
-    report.income_statement.net_profit.year_2023 = income_data["2023"]["net_profit"]
-    report.income_statement.net_profit.year_2022 = income_data["2022"]["net_profit"]
-    report.income_statement.income_before_income_taxes.year_2024 = income_data["2024"]["income_before_taxes"]
-    report.income_statement.income_before_income_taxes.year_2023 = income_data["2023"]["income_before_taxes"]
-    report.income_statement.income_before_income_taxes.year_2022 = income_data["2022"]["income_before_taxes"]
-    report.income_statement.income_tax_expense.year_2024 = income_data["2024"]["tax_expense"]
-    report.income_statement.income_tax_expense.year_2023 = income_data["2023"]["tax_expense"]
-    report.income_statement.income_tax_expense.year_2022 = income_data["2022"]["tax_expense"]
-    report.income_statement.interest_expense.year_2024 = income_data["2024"]["interest_expense"]
-    report.income_statement.interest_expense.year_2023 = income_data["2023"]["interest_expense"]
-    report.income_statement.interest_expense.year_2022 = income_data["2022"]["interest_expense"]
-    report.income_statement.primary_currency = income_data["currency"]
-    report.income_statement.primary_multiplier = income_data["multiplier"]
+    income_data = extract_s2_1(md_file_2024, md_file_2023, top_k=15, model="gpt-4.1-mini")
+
+    income_data = fill_income_data(income_data)
+
+    def getv(y, k, default="N/A"):
+        return income_data.get(y, {}).get(k, default)
+
+    # Assign to report (no KeyErrors if a year/key is missing)
+    report.income_statement.revenue.year_2024 = getv("2024", "revenue")
+    report.income_statement.revenue.year_2023 = getv("2023", "revenue")
+    report.income_statement.revenue.year_2022 = getv("2022", "revenue")
+
+    report.income_statement.cost_of_goods_sold.year_2024 = getv("2024", "cost_of_goods_sold")
+    report.income_statement.cost_of_goods_sold.year_2023 = getv("2023", "cost_of_goods_sold")
+    report.income_statement.cost_of_goods_sold.year_2022 = getv("2022", "cost_of_goods_sold")
+
+    report.income_statement.gross_profit.year_2024 = getv("2024", "gross_profit")
+    report.income_statement.gross_profit.year_2023 = getv("2023", "gross_profit")
+    report.income_statement.gross_profit.year_2022 = getv("2022", "gross_profit")
+
+    report.income_statement.operating_expense.year_2024 = getv("2024", "operating_expense")
+    report.income_statement.operating_expense.year_2023 = getv("2023", "operating_expense")
+    report.income_statement.operating_expense.year_2022 = getv("2022", "operating_expense")
+
+    report.income_statement.operating_income.year_2024 = getv("2024", "operating_income")
+    report.income_statement.operating_income.year_2023 = getv("2023", "operating_income")
+    report.income_statement.operating_income.year_2022 = getv("2022", "operating_income")
+
+    report.income_statement.net_profit.year_2024 = getv("2024", "net_profit")
+    report.income_statement.net_profit.year_2023 = getv("2023", "net_profit")
+    report.income_statement.net_profit.year_2022 = getv("2022", "net_profit")
+
+    report.income_statement.income_before_income_taxes.year_2024 = getv("2024", "income_before_taxes")
+    report.income_statement.income_before_income_taxes.year_2023 = getv("2023", "income_before_taxes")
+    report.income_statement.income_before_income_taxes.year_2022 = getv("2022", "income_before_taxes")
+
+    report.income_statement.income_tax_expense.year_2024 = getv("2024", "tax_expense")
+    report.income_statement.income_tax_expense.year_2023 = getv("2023", "tax_expense")
+    report.income_statement.income_tax_expense.year_2022 = getv("2022", "tax_expense")
+
+    report.income_statement.interest_expense.year_2024 = getv("2024", "interest_expense")
+    report.income_statement.interest_expense.year_2023 = getv("2023", "interest_expense")
+    report.income_statement.interest_expense.year_2022 = getv("2022", "interest_expense")
+
+    report.income_statement.primary_currency = income_data.get("currency", "N/A")
+    report.income_statement.primary_multiplier = income_data.get("multiplier", "N/A")
 
     
     print("✅ S2.1 Income Statement completed")
@@ -4253,13 +4561,16 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print(f"   Net Profit 2024: {income_data['2024']['net_profit']} | 2023: {income_data['2023']['net_profit']}")
     
     print("✅ COMPLETED: S2.1 - Income Statement")
+    
+    checkpoint("Section 2 - Financial Performance (S2.1 Income Statement)")
 
     print("\n" + "="*60)
     print("💰 PROCESSING: S2.2 - Balance Sheet (with RAG)")
     print("="*60)
     
     # Use FAISS search for balance sheet
-    balance_data = extract_s2_2(md_file_2024, md_file_2023, top_k=12, model="gpt-4.1-mini")
+    balance_data = extract_s2_2(md_file_2024, md_file_2023, top_k=20, model="gpt-4.1-mini")
+    balance_data = fill_missing_balance_sheet_values(balance_data)
 
     # Define all expected balance sheet fields
     fields = [
@@ -4277,12 +4588,15 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
         "prepaid_expenses",
     ]
     
+    MISSING = {None, "", "N/A", "-", "--"}
     for field in fields:
         bs_item = getattr(report.balance_sheet, field, None)
         if bs_item is not None:
             for year in ["2024", "2023", "2022"]:
                 value = balance_data.get(year, {}).get(field, "N/A")
-                setattr(bs_item, f"year_{year}", value)
+                cur_val = getattr(bs_item, f"year_{year}", None)
+                if (cur_val in MISSING) and (value not in MISSING):
+                    setattr(bs_item, f"year_{year}", value)
         else:
             print(f"[WARN] report.balance_sheet missing attribute: {field}")
 

@@ -39,6 +39,14 @@ def set_target_language(lang: Lang):
 def set_company_name(name: str):
     global COMPANY_NAME
     COMPANY_NAME = name
+    
+def set_currency_code(code: str):
+    global CURRENCY_CODE
+    CURRENCY_CODE = code
+    
+def set_multiplier(label: str):
+    global MULTIPLIER
+    MULTIPLIER = label
 
 # ============================= Helper Functions ===========================
 
@@ -468,7 +476,7 @@ def fill_missing_balance_sheet_values(balance_data):
 
 # ===================== S1.1: Basic Information with FAISS Search =====================
 
-def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini"):
+def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4.1-mini"):
     """
     Extract basic company information using FAISS search from 2024 report only.
     """
@@ -477,11 +485,15 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         search_queries = [
             "company name",
             "company information", 
+            "company details",
             "headquarters", 
             "company name establishment date headquarters",
+            "establishment date",
+            "founders", "location",
             "company profile basic information",
             "about the company history founding",
-            "corporate information establishment"
+            "corporate information establishment",
+            "principal office",
         ]
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
         search_queries = [
@@ -493,51 +505,52 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
             "注册地址 办公地址 总部地址",
             "成立日期 注册时间 设立时间",
             "注册资本 成立年份",
-            "主要办事处 营业地址"
+            "主要办事处 营业地址", "总部"
         ]
     elif TARGET_LANGUAGE == Lang.ZH_TR:
         search_queries = [
             "公司名稱 成立時間 總部",
             "公司簡介 基本資訊",
             "公司歷史 創立 關於公司",
-            "企業資訊 成立"
+            "企業資訊 成立",
+            "設立時間", "註冊地址",
+            "辦公地址 總部地址",
         ]
     elif TARGET_LANGUAGE == Lang.IN:
         indo_keywords = [
             "nama perusahaan",
-            "informasi perusahaan",
+            "tanggal pendirian",
             "kantor pusat",
+            "tempat pendaftaran",
             "profil perusahaan informasi dasar",
             "tentang perusahaan sejarah pendirian",
-            "informasi korporat pendirian"
+            "informasi korporat pendirian",
         ]
         search_queries = [
             "company name",
             "company information", 
+            "company details",
             "headquarters", 
             "company name establishment date headquarters",
+            "establishment date",
+            "founders", "location",
             "company profile basic information",
             "about the company history founding",
-            "corporate information establishment"
+            "corporate information establishment",
+            "principal office",
         ] + indo_keywords 
         
     context = retrieve_relevant_text(search_queries, top_k, md_file_2024)
-    if(len(context) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(context)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
 
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
-        Extract the following basic company information from the provided text (TEXT_2024) only:
+        Extract the following basic company information from the provided text (Company Financial Filing) only:
         1. Company Name (full legal name)
         2. Establishment Date (Month, Day, Year) — the date the company was founded/incorporated
         3. Headquarters Location formatted as "City, Country" (e.g., "San Francisco, United States")
 
         Rules:
-        - Use only what is explicitly stated in TEXT_2024. No external knowledge, no assumptions.
+        - Use only what is explicitly stated in Context 2024. No external knowledge, no assumptions.
         - Return verbatim wording for the company name if a full legal name is shown.
         - If multiple addresses are listed, prioritize: "Headquarters" > "Registered Office" > "Principal Place of Business".
         - If any item is not found, use "N/A".
@@ -551,13 +564,13 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
             "headquarters": "..."
         }}
 
-        TEXT_2024:
+        Context 2024:
         {context}
         """.strip()
             
     elif TARGET_LANGUAGE == Lang.ZH_SIM:          
         prompt = f"""
-        请仅基于 TEXT_2024 提取如下公司基础信息：
+        请仅基于 Context 2024 提取如下公司基础信息：
         1. 公司名称（完整法定名称）
         2. 成立日期（以“月/日/年”的形式；若原文为中文日期，请保持原文或可读中文格式）
         3. 总部所在地，按“国家省份城市”的顺序输出，不要包含空格或标点（例如：“中国福建省宁德市”）。
@@ -578,7 +591,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         "headquarters": "..."
         }}
 
-        TEXT_2024：
+        Context 2024：
         {context}
         """.strip()
               
@@ -592,7 +605,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
         若存在多個地址，請依優先級選擇：「總部」 > 「註冊辦公地址」 > 「主要營業地點」。
 
         規則：
-        - 僅使用 TEXT_2024 中明確出現的資訊，不得臆測或使用外部知識。
+        - 僅使用 Context 2024 中明確出現的資訊，不得臆測或使用外部知識。
         - 公司名稱盡量保留原文全稱。
         - 任一項未找到請填入 "N/A"。
 
@@ -617,7 +630,7 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=500
+            max_tokens=600
         )
         result = _safe_json_from_llm(response.choices[0].message.content)
         return (
@@ -631,7 +644,8 @@ def extract_s1_1(md_file_2024: str, top_k: int = 10, model: str = "gpt-4o-mini")
 
 # ===================== S1.2: Core Competencies with FAISS Search =====================
 
-def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4o-mini"):
+def extract_s1_2(md_file: str, top_k: int, year: int, model: str = "gpt-4.1-mini"):
+    
     """
     Extract all 4 core competencies for a given year using FAISS search.
     """
@@ -912,7 +926,7 @@ def merge_core_competencies(comp_2024: dict, comp_2023: dict) -> dict:
     return merged
 
 
-def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
+def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4.1-mini"):
     """
     Extract mission, vision, and core values using one combined FAISS search and LLM call.
     Supports EN, ZH-Simplified, ZH-Traditional prompts with strict JSON output.
@@ -1055,9 +1069,9 @@ def extract_s1_3(md_file_2024: str, top_k: int, model: str = "gpt-4o-mini"):
 def build_s2_1_prompt(context: str, year) -> str:
     
     if year == 2024:
-        years_instruction = "2024, 2023, 2022"
+        years_instruction = "2024 2023 2022"
     else:
-        years_instruction = "2023, 2022"
+        years_instruction = "2023 2022"
     
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
@@ -1208,8 +1222,8 @@ def build_s2_1_prompt(context: str, year) -> str:
             "tax_expense": "数值或 N/A",
             "interest_expense": "数值或 N/A"
         }},
-        "multiplier": "抄写报表中出现的单位，仅限以下之一：千万->Thousands / Millions / Billions（英文）",
-        "currency": "根据上下文判断：CNY / USD / GBP / EUR 等"
+            "multiplier": "抄写报表中出现的单位，仅限以下之一：千万->Thousands / Millions / Billions（英文）",
+            "currency": "根据上下文判断：CNY / USD / GBP / EUR 等"
         }}
 
         说明：
@@ -1321,7 +1335,8 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "revenue", "financial highlights", "gross profit", "sales", "cost of goods sold",
         "operating expenses", "operating income", "net profit net income",
         "income before taxes", "tax expense", "interest expense", "financial year end",
-        "consolidated income statement", "statement of comprehensive income"
+        "consolidated income statement", "statement of comprehensive income", "retained earnings",
+        "consolidated balance sheet", "shareholder's equity" 
     ]
     
     search_queries_ZH_SIM = [
@@ -1330,9 +1345,11 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "营业费用", "营业利润", "净利润",
         "税前利润", "所得税费用", "利息费用",
         "合并利润表", "综合收益表", "税前利润 利润总额",
-        "所得税费用 税费",
-        "财务费用 利息支出",
-        "其他业务收入 投资收益"
+        "所得税费用 税费", "营业利润",
+        "财务费用 利息支出", "投资收益", 
+        "其他业务收入 投资收益", 
+        "利润表 收入 成本 利润", "收入 成本 利润 净利润",
+        "税前利润 所得税费用", "综合收益表 利润总额",
     ]
     
     search_queries_ZH_TR = [
@@ -1340,16 +1357,21 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "營業收入 收入", "營業成本 銷售成本", "毛利潤",
         "營業費用", "營業利潤", "淨利潤",
         "稅前利潤", "所得稅費用", "利息費用",
-        "合併利潤表", "綜合收益表"
-    ]
+        "合併利潤表", "綜合收益表", "營業利潤", "營業費用",
+        "綜合收益", "毛利潤", "銷售成本", "成本費用",
+        "利潤表 收入 成本 利潤", "收入 成本 利潤 淨利潤",
+        "稅前利潤 所得稅費用", "綜合收益表 利潤總額",
+        "其他業務收入 投資收益 公允價值變動"
+    ] 
     
     search_queries_IN = [
         # English (base)
         "income statement", "profit and loss", "P&L statement",
         "revenue", "financial highlights", "gross profit", "sales", "cost of goods sold",
         "operating expenses", "operating income", "net profit net income",
-        "income before taxes", "tax expense", "interest expense",
-        "financial year end", "consolidated income statement", "statement of comprehensive income",
+        "income before taxes", "tax expense", "interest expense", "financial year end",
+        "consolidated income statement", "statement of comprehensive income", "retained earnings",
+        "consolidated balance sheet", "shareholder's equity" 
 
         # Indonesian
         "laporan laba rugi", "laporan pendapatan",
@@ -1372,24 +1394,6 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     
     context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
     prompt_2023 = build_s2_1_prompt(context_2023, year=2023)
-
-    if(len(context_2024) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(context_2024)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    
-    if(len(context_2023) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(context_2024)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        
-    #print(context_2024)
-    #print("----------------------\n\n\n\n\n\n")
-    #print(context_2023)
     
     result_2024 = None
     result_2023 = None
@@ -1410,7 +1414,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     except Exception as e:
         print(f"✗ Error extracting from 2024 report: {e}")
         result_2024 = {}
-    print(result_2024)
+
     try:
         response_2023 = client.chat.completions.create(
             model=model,
@@ -1427,7 +1431,7 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
     except Exception as e:
         print(f"✗ Error extracting from 2023 report: {e}")
         result_2023 = {}
-    print(result_2023)
+
         
     def _merge_year_data(primary_data, fallback_data):
         """
@@ -1506,92 +1510,19 @@ def extract_s2_1(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         "multiplier": _normalize_na(multiplier),
         "currency": _normalize_na(currency)
     }
+    
 
+def build_s2_2_prompt(context: str, year) -> str:
+    
+    if year == 2024:
+        years_instruction = "2024 2023 2022"
+    else:
+        years_instruction = "2023 2022"
 
-def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
-    """
-    Extract balance sheet data using FAISS search for specific balance sheet items.
-    """
-    
-    search_queries_EN = [
-        "balance sheet", "statement of financial position", "consolidated balance sheet",
-        "total assets", "financial highlights", "financial results", "financial position", "current assets", 
-        "non-current assets", "property plant equipment", "bank borrowing", "investments"
-        "total liabilities", "current liabilities", "non-current liabilities",
-        "total equity", "shareholders equity", "stockholders equity", 
-        "retained earnings", "share capital", "prepaid expenses", "consolidated statement of changes in equity", "inventories"
-    ]
-    
-    search_queries_ZH_SIM = [
-        "资产负债表", "财务状况表", "合并资产负债表",
-        "资产总计", "流动资产", "非流动资产", "固定资产",
-        "负债合计", "流动负债", "非流动负债",
-        "股东权益", "所有者权益", "权益总计",
-        "未分配利润", "股本", "实收资本", 
-        "货币资金 现金及现金等价物",
-        "应收账款 预付款项 其他应收款",
-        "存货 库存商品",
-        "固定资产 无形资产 长期资产",
-        "应付账款 短期借款 长期借款",
-        "未分配利润 留存收益",
-        "负债和所有者权益总计"
-    ]
-    
-    search_queries_ZH_TR = [
-        "資產負債表", "財務狀況表", "合併資產負債表",
-        "資產總計", "流動資產", "非流動資產", "固定資產",
-        "負債合計", "流動負債", "非流動負債",
-        "股東權益", "所有者權益", "權益總計",
-        "未分配利潤", "股本", "實收資本"
-    ]
-    search_queries_IN = [
-        # English (for bilingual filings)
-        "balance sheet", "statement of financial position", "consolidated balance sheet",
-        "total assets", "financial highlights", "financial results", "financial position", 
-        "current assets", "non-current assets", "property plant equipment", "bank borrowing", "investments",
-        "total liabilities", "current liabilities", "non-current liabilities",
-        "total equity", "shareholders equity", "stockholders equity", 
-        "retained earnings", "share capital", "prepaid expenses",
-
-        # Indonesian
-        "neraca", "laporan posisi keuangan", "laporan keuangan konsolidasian",
-        "total aset", "aset lancar", "aset tidak lancar", "aset tetap",
-        "jumlah kewajiban", "liabilitas lancar", "liabilitas jangka panjang", "kewajiban jangka panjang",
-        "ekuitas total", "ekuitas pemegang saham", "ekuitas pemilik",
-        "laba ditahan", "modal saham", "modal disetor", "posisi keuangan",
-    ]
-        
-    QUERY_MAP = {
-        Lang.EN: search_queries_EN,
-        Lang.ZH_SIM: search_queries_ZH_SIM,
-        Lang.ZH_TR: search_queries_ZH_TR,
-        Lang.IN: search_queries_IN
-    }
-
-    context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
-    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
-    
-    combined_context = f"""
-    === 2024 FINANCIAL DATA ===
-    {context_2024}
-    
-    === 2023 FINANCIAL DATA ===
-    {context_2023}
-    """
-    
-    if(len(combined_context) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    
-    print(f"{len(combined_context)} {combined_context}")
-    
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
-        You are a financial data extraction expert responsible for extracting the CONSOLIDATED Balance Sheet)
-        from a company's annual report for fiscal years 2024, 2023, and 2022.
+        You are a financial data extraction expert responsible for extracting the CONSOLIDATED Balance Sheet
+        from a company's annual report for fiscal years {years_instruction}.
 
         Identify and extract the following fields for each year:
 
@@ -1620,13 +1551,12 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         - Copy numeric strings exactly as they appear, including commas and decimals.
         - Use that information only for the "multiplier" field.
         - DO NOT adjust or scale the numeric values.
-        - Example:
-            * If the table says "单位：千元" and shows "786,658,123", output "786,658,123" and set multiplier = "Thousands".
-            * If the table says "单位：万元" and shows "40,091,704", output "40,091,704" and set multiplier = "Ten-Thousands".
-        - The multiplier must always be in English (Thousands / Ten-Thousands / Millions / Billions).
+        - The multiplier must always be in English (Thousands / Millions / Billions).
         - The currency must always be in its ISO 3-letter code (CNY, USD, GBP, EUR, etc.).
         - DO NOT convert all numbers to millions — preserve the same scale as shown in the document.
 
+        CURRENCY: {CURRENCY_CODE}
+        MULTIPLIER: {MULTIPLIER}
         Return the result as valid JSON with the exact structure below:
 
         {{
@@ -1669,18 +1599,18 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
             "inventories": "numeric value or N/A",
             "prepaid_expenses": "numeric value or N/A"
         }},
-        "multiplier": "copied directly from the table header: / Thousands / Ten-Thousands / Millions / Billions",
-        "currency": "copied directly from the table header: CNY / USD / GBP / MYR, etc."
+        "multiplier": "copied directly from the table header: / Thousands / Millions / Billions",
+        "currency": "copied directly from the table header: CNY / USD / GBP / MYR / IDR / etc."
         }}
 
-        BALANCE SHEET TEXT:
-        {combined_context}
+        FINANCIAL DATA from {year} ANNUAL REPORT:
+        {context}
         """
 
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
         prompt = f"""
         你是一名财务数据抽取专家，负责从公司年度报告中提取【合并资产负债表】（Consolidated Balance Sheet / 合併資產負債表）的数据，
-        涵盖 2024、2023 和 2022 年度。
+        涵盖 {years_instruction} 年度。
 
         请根据以下要求，从文本中提取各年度的财务项目：
 
@@ -1711,6 +1641,8 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
             * 若表头为“单位：千元”，且表中显示“786,658,123”，请输出 "786,658,123"，并将 multiplier 设为 "Thousands"；
             * 若表头为“单位：万元”，且表中显示“40,091,704”，请输出 "40,091,704"，并将 multiplier 设为 "Ten-Thousands"。
 
+        货币：{CURRENCY_CODE}
+        计量单位：{MULTIPLIER}
         - multiplier 必须使用英文（Thousands / Millions / Billions）。
         - currency 必须使用三位货币代码（CNY / USD / GBP / EUR 等）。
         - 不得统一转换为“Millions”；请严格保留报表中的原始计量单位。
@@ -1762,14 +1694,14 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         "currency": "根据表头原文确定：CNY / USD / GBP / EUR 等"
         }}
 
-        财务数据如下：
-        {combined_context}
+        来自 {year} 年年度报告的财务数据:
+        {context}
         """
 
     elif TARGET_LANGUAGE == Lang.ZH_TR:
         prompt = f"""
         你是一位財務資料擷取專家，負責從公司年度報告中提取【合併資產負債表】（Consolidated Balance Sheet / 合併資產負債表）的資料，
-        涵蓋 2024、2023 和 2022 年度。
+        涵蓋 {years_instruction} 年度。
 
         請依照以下指示，從文本中擷取各年度的財務項目：
 
@@ -1800,6 +1732,8 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
             * 若表頭為「單位：千元」，且表中顯示「786,658,123」，請輸出 "786,658,123"，並將 multiplier 設為 "Thousands"。
             * 若表頭為「單位：萬元」，且表中顯示「40,091,704」，請輸出 "40,091,704"，並將 multiplier 設為 "Ten-Thousands"。
 
+        貨幣：{CURRENCY_CODE}
+        計量單位：{MULTIPLIER}
         - multiplier 必須使用英文（Thousands / Millions / Billions）。
         - currency 必須使用三位貨幣代碼（CNY / USD / GBP / EUR 等）。
         - 不得將所有數值轉換為「Millions」，請保留報表中的原始單位。
@@ -1851,116 +1785,62 @@ def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
         "currency": "根據表頭原文判定：CNY / USD / GBP / EUR 等"
         }}
 
-        財務資料如下：
-        {combined_context}
+        來自 {year} 年年度報告的財務資料：
+        {context}
         """
-                    
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from balance sheet statements. Return valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0,
-            max_tokens=2000
-        )
-        
-        result = _safe_json_from_llm(response.choices[0].message.content)
-        # print(f"DEBUG - Balance sheet extraction result: {result}")
-        
-        data_2024 = result.get("2024", {})
-        data_2023 = result.get("2023", {})
-        data_2022 = result.get("2022", {})
-        print(result)
-        
-        return {
-            "2024": {
-                "total_assets": _normalize_na(data_2024.get("total_assets", "N/A")),
-                "current_assets": _normalize_na(data_2024.get("current_assets", "N/A")),
-                "non_current_assets": _normalize_na(data_2024.get("non_current_assets", "N/A")),
-                "total_liabilities": _normalize_na(data_2024.get("total_liabilities", "N/A")),
-                "current_liabilities": _normalize_na(data_2024.get("current_liabilities", "N/A")),
-                "non_current_liabilities": _normalize_na(data_2024.get("non_current_liabilities", "N/A")),
-                "shareholders_equity": _normalize_na(data_2024.get("shareholders_equity", "N/A")),
-                "retained_earnings": _normalize_na(data_2024.get("retained_earnings", "N/A")),
-                "total_equity_and_liabilities": _normalize_na(data_2024.get("total_equity_and_liabilities", "N/A")),
-                "inventories": _normalize_na(data_2024.get("inventories", "N/A")),
-                "prepaid_expenses": _normalize_na(data_2024.get("prepaid_expenses", "N/A")),
-            },
-            "2023": {
-                "total_assets": _normalize_na(data_2023.get("total_assets", "N/A")),
-                "current_assets": _normalize_na(data_2023.get("current_assets", "N/A")),
-                "non_current_assets": _normalize_na(data_2023.get("non_current_assets", "N/A")),
-                "total_liabilities": _normalize_na(data_2023.get("total_liabilities", "N/A")),
-                "current_liabilities": _normalize_na(data_2023.get("current_liabilities", "N/A")),
-                "non_current_liabilities": _normalize_na(data_2023.get("non_current_liabilities", "N/A")),
-                "shareholders_equity": _normalize_na(data_2023.get("shareholders_equity", "N/A")),
-                "retained_earnings": _normalize_na(data_2023.get("retained_earnings", "N/A")),
-                "total_equity_and_liabilities": _normalize_na(data_2023.get("total_equity_and_liabilities", "N/A")),
-                "inventories": _normalize_na(data_2023.get("inventories", "N/A")),
-                "prepaid_expenses": _normalize_na(data_2023.get("prepaid_expenses", "N/A")),
-            },
-            "2022": {
-                "total_assets": _normalize_na(data_2022.get("total_assets", "N/A")),
-                "current_assets": _normalize_na(data_2022.get("current_assets", "N/A")),
-                "non_current_assets": _normalize_na(data_2022.get("non_current_assets", "N/A")),
-                "total_liabilities": _normalize_na(data_2022.get("total_liabilities", "N/A")),
-                "current_liabilities": _normalize_na(data_2022.get("current_liabilities", "N/A")),
-                "non_current_liabilities": _normalize_na(data_2022.get("non_current_liabilities", "N/A")),
-                "shareholders_equity": _normalize_na(data_2022.get("shareholders_equity", "N/A")),
-                "retained_earnings": _normalize_na(data_2022.get("retained_earnings", "N/A")),
-                "total_equity_and_liabilities": _normalize_na(data_2022.get("total_equity_and_liabilities", "N/A")),
-                "inventories": _normalize_na(data_2022.get("inventories", "N/A")),
-                "prepaid_expenses": _normalize_na(data_2022.get("prepaid_expenses", "N/A")),
-            },
-            "multiplier": _normalize_na(result.get("multiplier", "Units")),
-            "currency": _normalize_na(result.get("currency", "USD")),
-        }
-
-    except Exception as e:
-        print(f"Error extract_s2_2_balance_sheet: {e}")
-        
-        
-def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = "gpt-4o-mini"):
+    return prompt                 
+    
+def extract_s2_2(md_file_2024: str, md_file_2023: str, top_k: int, model: str):
     """
-    Extract cash flow statement data using FAISS search for specific items.
-    Returns structured JSON for 2024, 2023, 2022 with multiplier and currency.
+    Extract balance sheet data using FAISS search for specific balance sheet items.
     """
-
-    # ----------------- Search queries -----------------
+    
     search_queries_EN = [
-        "cash flow statement", "statement of cash flows", "consolidated cash flow statement",
-        "net cash from operating activities", "net cash from investing activities", "net cash from financing activities",
-        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents",
-    ]
-
-    search_queries_ZH_SIM = [
-        "现金流量表", "合并现金流量表", "现金流量状况表",
-        "经营活动产生的现金流量净额", "投资活动产生的现金流量净额", "筹资活动产生的现金流量净额",
-        "现金及现金等价物净增加额", "现金净流入 净流出", "分红 股息 支付", "现金及现金等价物", "现金流入 现金流出",
-        "股利支付 分红派息"
-    ]
-
-    search_queries_ZH_TR = [
-        "現金流量表", "合併現金流量表", "現金流量狀況表",
-        "營運活動產生之現金流量淨額", "投資活動產生之現金流量淨額", "籌資活動產生之現金流量淨額", 
-        "現金及約當現金淨增加額", "現金淨流入 淨流出", "股息 分紅 支付", "現金及約當現金"
+        "balance sheet", "statement of financial position", "consolidated balance sheet",
+        "total assets", "financial highlights", "financial results", "financial position", "current assets", 
+        "non-current assets", "property plant equipment", "bank borrowing", "investments",
+        "total liabilities", "current liabilities", "non-current liabilities", 
+        "total equity", "shareholders equity", "stockholders equity", 
+        "retained earnings", "share capital", "prepaid expenses", "consolidated statement of changes in equity", "inventories"
     ]
     
-    search_queries_IN = [
-        # English (for bilingual filings)
-        "cash flow statement", "statement of cash flows", "consolidated cash flow statement",
-        "net cash from operating activities", "net cash from investing activities", "net cash from financing activities",
-        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents", "consolidated statement of cash flows"
-
-        # Indonesian
-        "laporan arus kas", "laporan arus kas konsolidasian", "arus kas",
-        "arus kas dari aktivitas operasi", "arus kas dari aktivitas investasi", "arus kas dari aktivitas pendanaan",
-        "kenaikan bersih kas", "penurunan bersih kas", "pembayaran dividen", "kas dan setara kas",
-        "arus kas bersih", "arus kas masuk keluar", "laporan arus kas gabungan",
+    search_queries_ZH_SIM = [
+        "资产负债表", "财务状况表", "合并资产负债表",
+        "资产总计", "流动资产", "非流动资产", "固定资产",
+        "负债合计", "流动负债", "非流动负债",
+        "股东权益", "所有者权益", "权益总计",
+        "未分配利润", "股本", "实收资本", 
+        "货币资金 现金及现金等价物",
+        "应收账款 预付款项 其他应收款",
+        "存货 库存商品",
+        "固定资产 无形资产 长期资产",
+        "应付账款 短期借款 长期借款",
+        "未分配利润 留存收益",
+        "负债和所有者权益总计"
     ]
+    
+    search_queries_ZH_TR = [
+        "資產負債表", "財務狀況表", "合併資產負債表",
+        "資產總計", "流動資產", "非流動資產", "固定資產",
+        "負債合計", "流動負債", "非流動負債",
+        "股東權益", "所有者權益", "權益總計",
+        "未分配利潤", "股本", "實收資本"
+    ]
+    search_queries_IN = [
+        "balance sheet", "statement of financial position", "consolidated balance sheet",
+        "total assets", "financial highlights", "financial results", "financial position", "current assets", 
+        "non-current assets", "property plant equipment", "bank borrowing", "investments",
+        "total liabilities", "current liabilities", "non-current liabilities",
+        "total equity", "shareholders equity", "stockholders equity", 
+        "retained earnings", "share capital", "prepaid expenses", "consolidated statement of changes in equity", "inventories"
 
+        "neraca", "laporan posisi keuangan", "laporan keuangan konsolidasian",
+        "total aset", "aset lancar", "aset tidak lancar", "aset tetap",
+        "jumlah kewajiban", "liabilitas lancar", "liabilitas jangka panjang", "kewajiban jangka panjang",
+        "ekuitas total", "ekuitas pemegang saham", "ekuitas pemilik",
+        "laba ditahan", "modal saham", "modal disetor", "posisi keuangan",
+    ]
+        
     QUERY_MAP = {
         Lang.EN: search_queries_EN,
         Lang.ZH_SIM: search_queries_ZH_SIM,
@@ -1968,31 +1848,137 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         Lang.IN: search_queries_IN
     }
 
-    # ----------------- Get contexts -----------------
     context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
-    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
-
-    combined_context = f"""
-    === 2024 CASH FLOW DATA ===
-    {context_2024}
-
-    === 2023 CASH FLOW DATA ===
-    {context_2023}
-    """
+    prompt_2024 = build_s2_2_prompt(context_2024, year=2024)
     
-    if(len( combined_context) > 350_000):
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length {len(combined_context)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
+    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
+    prompt_2023 = build_s2_2_prompt(context_2023, year=2023)
+    
+    result_2024 = None
+    result_2023 = None
+    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from balance sheet statements. Return valid JSON only."},
+                {"role": "user", "content": prompt_2024}
+            ],
+            temperature=0,
+            max_tokens=2000
+        )
+        result_2024 = _safe_json_from_llm(response.choices[0].message.content)
+        print(f"✓ Successfully extracted from 2024 report")
+    except Exception as e:
+        print(f"✗ Error extracting from 2024 report: {e}")
+        result_2024 = {}
 
-    # ----------------- Build prompt -----------------
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from balance sheet statements. Return valid JSON only."},
+                {"role": "user", "content": prompt_2023}
+            ],
+            temperature=0,
+            max_tokens=2000
+        )
+        result_2023 = _safe_json_from_llm(response.choices[0].message.content)
+        print(f"✓ Successfully extracted from 2023 report")
+    except Exception as e:
+        print(f"✗ Error extracting from 2023 report: {e}")
+        result_2023 = {}
+
+    def _merge_year_data(primary_data, fallback_data):
+        if not primary_data:
+            return fallback_data or {}
+        if not fallback_data:
+            return primary_data or {}
+        
+        merged = {}
+        all_keys = set(primary_data.keys()) | set(fallback_data.keys())
+        
+        for key in all_keys:
+            primary_value = primary_data.get(key, "N/A")
+            fallback_value = fallback_data.get(key, "N/A")
+            
+            if primary_value not in ["N/A", None, ""]:
+                merged[key] = primary_value
+            else:
+                merged[key] = fallback_value
+        
+        return merged
+    
+    data_2024 = result_2024.get("2024", {}) if result_2024 else {}
+
+    data_2023_from_2024 = result_2024.get("2023", {}) if result_2024 else {}
+    data_2023_from_2023 = result_2023.get("2023", {}) if result_2023 else {}
+    data_2023 = _merge_year_data(data_2023_from_2024, data_2023_from_2023)
+ 
+    data_2022_from_2024 = result_2024.get("2022", {}) if result_2024 else {}
+    data_2022_from_2023 = result_2023.get("2022", {}) if result_2023 else {}
+    data_2022 = _merge_year_data(data_2022_from_2024, data_2022_from_2023)    
+
+    multiplier = result_2024.get("multiplier", result_2023.get("multiplier", "Units") if result_2023 else "Units") if result_2024 else "Units"
+    currency = result_2024.get("currency", result_2023.get("currency", "USD") if result_2023 else "USD") if result_2024 else "USD"
+        
+    return {
+        "2024": {
+            "total_assets": _normalize_na(data_2024.get("total_assets", "N/A")),
+            "current_assets": _normalize_na(data_2024.get("current_assets", "N/A")),
+            "non_current_assets": _normalize_na(data_2024.get("non_current_assets", "N/A")),
+            "total_liabilities": _normalize_na(data_2024.get("total_liabilities", "N/A")),
+            "current_liabilities": _normalize_na(data_2024.get("current_liabilities", "N/A")),
+            "non_current_liabilities": _normalize_na(data_2024.get("non_current_liabilities", "N/A")),
+            "shareholders_equity": _normalize_na(data_2024.get("shareholders_equity", "N/A")),
+            "retained_earnings": _normalize_na(data_2024.get("retained_earnings", "N/A")),
+            "total_equity_and_liabilities": _normalize_na(data_2024.get("total_equity_and_liabilities", "N/A")),
+            "inventories": _normalize_na(data_2024.get("inventories", "N/A")),
+            "prepaid_expenses": _normalize_na(data_2024.get("prepaid_expenses", "N/A")),
+        },
+        "2023": {
+            "total_assets": _normalize_na(data_2023.get("total_assets", "N/A")),
+            "current_assets": _normalize_na(data_2023.get("current_assets", "N/A")),
+            "non_current_assets": _normalize_na(data_2023.get("non_current_assets", "N/A")),
+            "total_liabilities": _normalize_na(data_2023.get("total_liabilities", "N/A")),
+            "current_liabilities": _normalize_na(data_2023.get("current_liabilities", "N/A")),
+            "non_current_liabilities": _normalize_na(data_2023.get("non_current_liabilities", "N/A")),
+            "shareholders_equity": _normalize_na(data_2023.get("shareholders_equity", "N/A")),
+            "retained_earnings": _normalize_na(data_2023.get("retained_earnings", "N/A")),
+            "total_equity_and_liabilities": _normalize_na(data_2023.get("total_equity_and_liabilities", "N/A")),
+            "inventories": _normalize_na(data_2023.get("inventories", "N/A")),
+            "prepaid_expenses": _normalize_na(data_2023.get("prepaid_expenses", "N/A")),
+        },
+        "2022": {
+            "total_assets": _normalize_na(data_2022.get("total_assets", "N/A")),
+            "current_assets": _normalize_na(data_2022.get("current_assets", "N/A")),
+            "non_current_assets": _normalize_na(data_2022.get("non_current_assets", "N/A")),
+            "total_liabilities": _normalize_na(data_2022.get("total_liabilities", "N/A")),
+            "current_liabilities": _normalize_na(data_2022.get("current_liabilities", "N/A")),
+            "non_current_liabilities": _normalize_na(data_2022.get("non_current_liabilities", "N/A")),
+            "shareholders_equity": _normalize_na(data_2022.get("shareholders_equity", "N/A")),
+            "retained_earnings": _normalize_na(data_2022.get("retained_earnings", "N/A")),
+            "total_equity_and_liabilities": _normalize_na(data_2022.get("total_equity_and_liabilities", "N/A")),
+            "inventories": _normalize_na(data_2022.get("inventories", "N/A")),
+            "prepaid_expenses": _normalize_na(data_2022.get("prepaid_expenses", "N/A")),
+        },
+        "multiplier": _normalize_na(multiplier),
+        "currency": _normalize_na(currency),
+    }
+
+    
+def build_s2_3_prompt(context: str, year) -> str:
+    
+    if year == 2024:
+        years_instruction = "2024 2023 2022"
+    else:
+        years_instruction = "2023 2022"
+        
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
         You are a financial data extraction expert. Extract data from the CONSOLIDATED CASH FLOW STATEMENT 
-        (合并现金流量表 / 合併現金流量表 / Consolidated Cash Flow Statement) 
-        for fiscal years 2024, 2023, and 2022.
+        (Consolidated Cash Flow Statement) 
+        for fiscal years {years_instruction} from a company's annual report.
 
         Extract exactly the following fields for each year:
         1. Net Cash Flow from Operations (or Operating Activities)
@@ -2039,14 +2025,16 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
             "currency": "USD / GBP / EUR / CNY / IDR / MYR, etc."
         }}
 
-        CASH FLOW STATEMENT TEXT:
-        {combined_context}
+        CURRENCY: {CURRENCY_CODE}
+        MULTIPLIER: {MULTIPLIER}
+        FINANCIAL DATA from {year} ANNUAL REPORT:
+        {context}
         """
 
     elif TARGET_LANGUAGE == Lang.ZH_SIM:
         prompt = f"""
         你是一名财务数据抽取专家，请从公司年度报告的【合并现金流量表】（Consolidated Cash Flow Statement）
-        中提取 2024、2023 和 2022 年的数据。
+        中提取 {years_instruction} 年的数据。
 
         请提取以下五个项目：
         1. 经营活动产生的现金流量净额
@@ -2062,6 +2050,7 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - multiplier 请从表头单位中提取（Thousands / Millions / Billions）。
         - currency 请从货币符号或说明中识别（如 CNY / USD / GBP）。
         - 不要推算或调整数值。
+        - 不得通过期初与期末现金余额计算“现金净增加额”，只能直接提取表中提供的数值。
 
         输出为以下严格 JSON 格式：
 
@@ -2091,14 +2080,16 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
             "currency": "CNY / USD / GBP / EUR 等"
         }}
 
-        现金流量表文本如下：
-        {combined_context}
+        货币：{CURRENCY_CODE}
+        计量单位：{MULTIPLIER}
+        {year} 年现金流量表如下：
+        {context}
         """
 
     elif TARGET_LANGUAGE == Lang.ZH_TR:
         prompt = f"""
         你是一位財務資料擷取專家，請從【合併現金流量表】（Consolidated Cash Flow Statement）
-        擷取 2024、2023 和 2022 年的資料。
+        擷取 {years_instruction} 年的資料。
 
         擷取以下五項：
         1. 營運活動產生之現金流量淨額
@@ -2113,86 +2104,203 @@ def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = 
         - 若欄位缺失，返回 "N/A"。
         - multiplier 由表頭單位推斷（Thousands / Millions / Billions）。
         - currency 由幣別說明判定（如 CNY / USD / GBP / EUR）。
+        - 不得透過期初與期末現金餘額計算「現金淨增加額」，只能直接擷取表中提供的數值。
 
         請輸出以下 JSON 結構：
 
         {{
-            "2024": {{
-                "net_cash_from_operations": "數值或 N/A",
-                "net_cash_from_investing": "數值或 N/A",
-                "net_cash_from_financing": "數值或 N/A",
-                "net_increase_decrease_in_cash": "數值或 N/A",
-                "dividends": "數值或 N/A"
-            }},
-            "2023": {{
-                "net_cash_from_operations": "數值或 N/A",
-                "net_cash_from_investing": "數值或 N/A",
-                "net_cash_from_financing": "數值或 N/A",
-                "net_increase_decrease_in_cash": "數值或 N/A",
-                "dividends": "數值或 N/A"
-            }},
-            "2022": {{
-                "net_cash_from_operations": "數值或 N/A",
-                "net_cash_from_investing": "數值或 N/A",
-                "net_cash_from_financing": "數值或 N/A",
-                "net_increase_decrease_in_cash": "數值或 N/A",
-                "dividends": "數值或 N/A"
-            }},
-            "multiplier": "Thousands / Millions / Billions",
-            "currency": "CNY / USD / GBP / EUR 等"
+        "2024": {{
+            "net_cash_from_operations": "數值或 N/A",
+            "net_cash_from_investing": "數值或 N/A",
+            "net_cash_from_financing": "數值或 N/A",
+            "net_increase_decrease_in_cash": "數值或 N/A",
+            "dividends": "數值或 N/A"
+        }},
+        "2023": {{
+            "net_cash_from_operations": "數值或 N/A",
+            "net_cash_from_investing": "數值或 N/A",
+            "net_cash_from_financing": "數值或 N/A",
+            "net_increase_decrease_in_cash": "數值或 N/A",
+            "dividends": "數值或 N/A"
+        }},
+        "2022": {{
+            "net_cash_from_operations": "數值或 N/A",
+            "net_cash_from_investing": "數值或 N/A",
+            "net_cash_from_financing": "數值或 N/A",
+            "net_increase_decrease_in_cash": "數值或 N/A",
+            "dividends": "數值或 N/A"
+        }},
+        "multiplier": "Thousands / Millions / Billions",
+        "currency": "CNY / USD / GBP / EUR 等"
         }}
 
-        現金流量表如下：
-        {combined_context}
+        貨幣：{CURRENCY_CODE}
+        計量單位：{MULTIPLIER}
+        {year} 年現金流量表如下：
+        {context}
         """
+    return prompt
 
-    # ----------------- LLM call -----------------
+def extract_s2_3(md_file_2024: str, md_file_2023: str, top_k: int, model: str = "gpt-4.1-mini"):
+    """
+    Extract cash flow statement data using FAISS search for specific items.
+    Returns structured JSON for 2024, 2023, 2022 with multiplier and currency.
+    """
+
+    # ----------------- Search queries -----------------
+    search_queries_EN = [
+        "cash flow statement", "statement of cash flows", "consolidated cash flow statement", "consolidated statement of cash flows",
+        "net cash from operating activities", "net cash from investing activities", "net cash from financing activities",
+        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents", "summary of cash flows",
+        "cash generated by operations", "net increase in cash", "net change in cash and cash equivalents", "dividends",
+        "interest paid", "interest received", "dividend vouchers", "cash inflows cash outflows", "cash receipts cash payments"
+    ]
+
+    search_queries_ZH_SIM = [
+        "现金流量表", "合并现金流量表", "现金流量状况表",
+        "经营活动产生的现金流量净额", "投资活动产生的现金流量净额", "筹资活动产生的现金流量净额",
+        "现金及现金等价物净增加额", "现金净流入 净流出", "分红 股息 支付", "现金及现金等价物", "现金流入 现金流出",
+        "股利支付 分红派息", "分红", "股息", "派息", "利息支付", "利息收入", "支付利息",
+        "现金流量汇总表", "现金流量概览",
+    ]
+
+    search_queries_ZH_TR = [
+        "現金流量表", "合併現金流量表", "現金流量狀況表",
+        "營運活動產生之現金流量淨額", "投資活動產生之現金流量淨額", "籌資活動產生之現金流量淨額", 
+        "現金及約當現金淨增加額", "現金淨流入 淨流出", "股息 分紅 支付", "現金及約當現金",
+        "現金淨變化", "現金增加", "現金減少", "股息", "分紅", "派息", "股利支付", "現金流量概覽",
+    ]
+    
+    search_queries_IN = [
+        # English (for bilingual filings)
+        "cash flow statement", "statement of cash flows", "consolidated cash flow statement", "consolidated statement of cash flows",
+        "net cash from operating activities", "net cash from investing activities", "net cash from financing activities",
+        "net increase in cash", "net decrease in cash", "dividends paid", "cash and cash equivalents", "summary of cash flows",
+        "cash generated by operations", "net increase in cash", "net change in cash and cash equivalents", "dividends",
+        "interest paid", "interest received", "dividend vouchers", "cash inflows cash outflows", "cash receipts cash payments",
+
+        # Indonesian
+        "laporan arus kas", "laporan arus kas konsolidasian", "arus kas",
+        "arus kas dari aktivitas operasi", "arus kas dari aktivitas investasi", "arus kas dari aktivitas pendanaan",
+        "kenaikan bersih kas", "penurunan bersih kas", "pembayaran dividen", "kas dan setara kas",
+        "arus kas bersih", "arus kas masuk keluar", "laporan arus kas gabungan",
+    ]
+
+    QUERY_MAP = {
+        Lang.EN: search_queries_EN,
+        Lang.ZH_SIM: search_queries_ZH_SIM,
+        Lang.ZH_TR: search_queries_ZH_TR,
+        Lang.IN: search_queries_IN
+    }
+
+    context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
+    prompt_2024 = build_s2_3_prompt(context_2024, year=2024)
+    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
+    prompt_2023 = build_s2_3_prompt(context_2023, year=2023)
+    
+    result_2024 = None
+    result_2023 = None
+    
     try:
-        response = client.chat.completions.create(
+        response_2024 = client.chat.completions.create(
             model=model,
+            response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": "You are a financial data extraction expert. Return only valid JSON."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from financial statements. Return valid JSON only."},
+                {"role": "user", "content": prompt_2024}
             ],
             temperature=0,
             max_tokens=2000
         )
-
-        result = _safe_json_from_llm(response.choices[0].message.content)
-        # print(f"DEBUG - Cash flow extraction result: {result}")
-
-        data_2024 = result.get("2024", {})
-        data_2023 = result.get("2023", {})
-        data_2022 = result.get("2022", {})
-
-        return {
-            "2024": {
-                "net_cash_from_operations": _normalize_na(data_2024.get("net_cash_from_operations", "N/A")),
-                "net_cash_from_investing": _normalize_na(data_2024.get("net_cash_from_investing", "N/A")),
-                "net_cash_from_financing": _normalize_na(data_2024.get("net_cash_from_financing", "N/A")),
-                "net_increase_decrease_in_cash": _normalize_na(data_2024.get("net_increase_decrease_in_cash", "N/A")),
-                "dividends": _normalize_na(data_2024.get("dividends", "N/A"))
-            },
-            "2023": {
-                "net_cash_from_operations": _normalize_na(data_2023.get("net_cash_from_operations", "N/A")),
-                "net_cash_from_investing": _normalize_na(data_2023.get("net_cash_from_investing", "N/A")),
-                "net_cash_from_financing": _normalize_na(data_2023.get("net_cash_from_financing", "N/A")),
-                "net_increase_decrease_in_cash": _normalize_na(data_2023.get("net_increase_decrease_in_cash", "N/A")),
-                "dividends": _normalize_na(data_2023.get("dividends", "N/A"))
-            },
-            "2022": {
-                "net_cash_from_operations": _normalize_na(data_2022.get("net_cash_from_operations", "N/A")),
-                "net_cash_from_investing": _normalize_na(data_2022.get("net_cash_from_investing", "N/A")),
-                "net_cash_from_financing": _normalize_na(data_2022.get("net_cash_from_financing", "N/A")),
-                "net_increase_decrease_in_cash": _normalize_na(data_2022.get("net_increase_decrease_in_cash", "N/A")),
-                "dividends": _normalize_na(data_2022.get("dividends", "N/A"))
-            },
-            "multiplier": _normalize_na(result.get("multiplier", "Units")),
-            "currency": _normalize_na(result.get("currency", "USD")),
-        }
-
+        result_2024 = _safe_json_from_llm(response_2024.choices[0].message.content)
+        print(f"✓ Successfully extracted from 2024 report")
     except Exception as e:
-        print(f"Error extract_s2_3_cash_flow: {e}")
+        print(f"✗ Error extracting from 2024 report: {e}")
+        result_2024 = {}
+
+    try:
+        response_2023 = client.chat.completions.create(
+            model=model,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": "You are a financial data extraction expert. Extract exact values from financial statements. Return valid JSON only."},
+                {"role": "user", "content": prompt_2023}
+            ],
+            temperature=0,
+            max_tokens=2000
+        )
+        result_2023 = _safe_json_from_llm(response_2023.choices[0].message.content)
+        print(f"✓ Successfully extracted from 2023 report")
+    except Exception as e:
+        print(f"✗ Error extracting from 2023 report: {e}")
+        result_2023 = {}
+        
+    def _merge_year_data(primary_data, fallback_data):
+        """
+        Merge year data field-by-field.
+        Use primary if value is not N/A, otherwise use fallback.
+        """
+        if not primary_data:
+            return fallback_data or {}
+        if not fallback_data:
+            return primary_data or {}
+        
+        merged = {}
+        all_keys = set(primary_data.keys()) | set(fallback_data.keys())
+        
+        for key in all_keys:
+            primary_value = primary_data.get(key, "N/A")
+            fallback_value = fallback_data.get(key, "N/A")
+            
+            # Use primary unless it's N/A, then use fallback
+            if primary_value not in ["N/A", None, ""]:
+                merged[key] = primary_value
+            else:
+                merged[key] = fallback_value
+        
+        return merged
+
+    data_2024 = result_2024.get("2024", {}) if result_2024 else {}
+
+    # For 2023: merge 2024 report and 2023 report field-by-field
+    data_2023_from_2024 = result_2024.get("2023", {}) if result_2024 else {}
+    data_2023_from_2023 = result_2023.get("2023", {}) if result_2023 else {}
+    data_2023 = _merge_year_data(data_2023_from_2024, data_2023_from_2023)
+
+    # For 2022: merge 2024 report and 2023 report field-by-field  
+    data_2022_from_2024 = result_2024.get("2022", {}) if result_2024 else {}
+    data_2022_from_2023 = result_2023.get("2022", {}) if result_2023 else {}
+    data_2022 = _merge_year_data(data_2022_from_2024, data_2022_from_2023)    
+
+    multiplier = result_2024.get("multiplier", result_2023.get("multiplier", "Units") if result_2023 else "Units") if result_2024 else "Units"
+    currency = result_2024.get("currency", result_2023.get("currency", "USD") if result_2023 else "USD") if result_2024 else "USD"
+    
+    return {
+        "2024": {
+            "net_cash_from_operations": _normalize_na(data_2024.get("net_cash_from_operations", "N/A")),
+            "net_cash_from_investing": _normalize_na(data_2024.get("net_cash_from_investing", "N/A")),
+            "net_cash_from_financing": _normalize_na(data_2024.get("net_cash_from_financing", "N/A")),
+            "net_increase_decrease_in_cash": _normalize_na(data_2024.get("net_increase_decrease_in_cash", "N/A")),
+            "dividends": _normalize_na(data_2024.get("dividends", "N/A"))
+        },
+        "2023": {
+            "net_cash_from_operations": _normalize_na(data_2023.get("net_cash_from_operations", "N/A")),
+            "net_cash_from_investing": _normalize_na(data_2023.get("net_cash_from_investing", "N/A")),
+            "net_cash_from_financing": _normalize_na(data_2023.get("net_cash_from_financing", "N/A")),
+            "net_increase_decrease_in_cash": _normalize_na(data_2023.get("net_increase_decrease_in_cash", "N/A")),
+            "dividends": _normalize_na(data_2023.get("dividends", "N/A"))
+        },
+        "2022": {
+            "net_cash_from_operations": _normalize_na(data_2022.get("net_cash_from_operations", "N/A")),
+            "net_cash_from_investing": _normalize_na(data_2022.get("net_cash_from_investing", "N/A")),
+            "net_cash_from_financing": _normalize_na(data_2022.get("net_cash_from_financing", "N/A")),
+            "net_increase_decrease_in_cash": _normalize_na(data_2022.get("net_increase_decrease_in_cash", "N/A")),
+            "dividends": _normalize_na(data_2022.get("dividends", "N/A"))
+        },
+        "multiplier": _normalize_na(multiplier),
+        "currency": _normalize_na(currency),
+    }
+
         
 def extract_s2_4(report):
     """
@@ -2338,108 +2446,6 @@ def extract_s2_4(report):
         setattr(km.effective_tax_rate, f"year_{year}", eff_tax_rate)
         setattr(km.dividend_payout_ratio, f"year_{year}", payout_ratio)
 
-          
-def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
-    """
-    Extracts 'Revenue by Product/Service' and 'Revenue by Geographic Region' from 
-    both 2024 and 2023 annual reports using FAISS RAG section search.
-    Returns structured JSON for 2024, 2023, 2022.
-    """
-    
-    queries_EN = [
-        "revenue by product",
-        "revenue by service",
-        "revenue by business segment",
-        "revenue by division",
-        "revenue by geographic region",
-        "revenue by geographic segments",
-        "revenue by geographical segments",
-        "regional revenue",
-        "revenue by country",
-        "revenue by area",
-        "revenue breakdown",
-        "locational revenue",
-        "revenue by product",
-        "revenue by service", 
-        "segmental analysis",
-        "note segment information",
-    ]
-    queries_ZH_SIM = [
-        "按产品划分的收入", "按业务分部的收入", "按地区划分的收入",
-        "按国家划分的收入", "分部信息", "分部收入", "区域收入",
-    ]
-    queries_ZH_TR = [
-        "按產品劃分的收入", "按業務分部的收入", "按地區劃分的收入",
-        "按國家劃分的收入", "分部資訊", "分部收入", "區域收入",
-    ]
-
-    queries_IN = [
-        # English (for bilingual filings)
-        "revenue by product",
-        "revenue by service",
-        "revenue by business segment",
-        "revenue by division",
-        "revenue by geographic region",
-        "revenue by geographic segments",
-        "revenue by geographical segments",
-        "revenue by country",
-        "revenue by area",
-        "revenue breakdown",
-        "segmental analysis",
-        "note segment information",
-
-        # Indonesian
-        "pendapatan berdasarkan produk",
-        "pendapatan berdasarkan layanan",
-        "pendapatan berdasarkan segmen usaha",
-        "pendapatan berdasarkan divisi",
-        "pendapatan berdasarkan wilayah geografis",
-        "pendapatan berdasarkan negara",
-        "pendapatan berdasarkan area",
-        "rincian pendapatan",
-        "analisis segmen",
-        "catatan informasi segmen",
-        "pendapatan per segmen",
-        "pendapatan per wilayah", "pendapatan per divisi",
-    ]
-
-    QUERY_MAP = {
-        Lang.EN: queries_EN,
-        Lang.ZH_SIM: queries_ZH_SIM,
-        Lang.ZH_TR: queries_ZH_TR,
-        Lang.IN: queries_IN
-    }
-
-    context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
-    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
-    
-    prompt_2024 = get_s2_5_prompt(context_2024)
-    prompt_2023 = get_s2_5_prompt(context_2023)
-    
-    response_2024 = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
-            {"role": "user", "content": prompt_2024}
-        ],
-        temperature=0
-    )
-
-    response_2023 = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
-            {"role": "user", "content": prompt_2023}
-        ],
-        temperature=0
-    )
-
-    data_2024 = _safe_json_from_llm(response_2024.choices[0].message.content)
-    data_2023 = _safe_json_from_llm(response_2023.choices[0].message.content)
-    print(f"DEBUG - S2.5 2024 extraction result: {data_2024}")
-    merged = merge_revenue_dicts(data_2024, data_2023)
-    return merged
-
 
 def get_s2_5_prompt(context: str) -> str:
 
@@ -2447,7 +2453,7 @@ def get_s2_5_prompt(context: str) -> str:
         prompt = f"""
         You are a forensic financial data extractor.
 
-        From the CONTEXT, extract the company {COMPANY_NAME}'s revenue breakdowns for fiscal years 2024, 2023, 2022 in two categories:
+        From the CONTEXT, extract the company {COMPANY_NAME}'s revenue breakdowns for fiscal years 2024, 2023, and 2022 in two categories:
         • By Product/Service (business segments)
         • By Geographic Region (countries/regions)
 
@@ -2633,7 +2639,116 @@ def merge_revenue_dicts(data_2024: dict, data_2023: dict) -> dict:
                 merged[year][field] = v2024
     return merged
 
-          
+def extract_s2_5(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
+    """
+    Extracts 'Revenue by Product/Service' and 'Revenue by Geographic Region' from 
+    both 2024 and 2023 annual reports using FAISS RAG section search.
+    Returns structured JSON for 2024, 2023, 2022.
+    """
+    
+    queries_EN = [
+        "revenue by product",
+        "revenue by service",
+        "revenue by business segment",
+        "revenue by division",
+        "revenue by geographic region",
+        "revenue by geographic segments",
+        "revenue by geographical segments",
+        "regional revenue",
+        "revenue by country",
+        "revenue by area",
+        "revenue breakdown",
+        "locational revenue",
+        "revenue by product",
+        "revenue by service", 
+        "segmental analysis",
+        "note segment information",
+        "revenue by channel",
+        "online vs offline revenue",
+        "top customers revenue",
+    ]
+    queries_ZH_SIM = [
+        "按产品划分的收入", "按业务分部的收入", "按地区划分的收入",
+        "按国家划分的收入", "分部信息", "分部收入", "区域收入",
+        "收入构成", "收入拆分", "收入分解", "按产品划分的收入",
+        "按地区划分的收入", "按地域划分的收入", "按国家划分的收入", "营业收入"
+        ""
+    ]
+    queries_ZH_TR = [
+        "按產品劃分的收入", "按業務分部的收入", "按地區劃分的收入",
+        "按國家劃分的收入", "分部資訊", "分部收入", "區域收入",
+        "收入構成", "收入拆分", "收入分解", "海外收入", 
+        "分部資訊", "分部報告", "出口銷售收入",
+        ""
+    ]
+
+    queries_IN = [
+        # English (for bilingual filings)
+        "revenue by product",
+        "revenue by service",
+        "revenue by business segment",
+        "revenue by division",
+        "revenue by geographic region",
+        "revenue by geographic segments",
+        "revenue by geographical segments",
+        "revenue by country",
+        "revenue by area",
+        "revenue breakdown",
+        "segmental analysis",
+        "note segment information",
+
+        # Indonesian
+        "pendapatan berdasarkan produk",
+        "pendapatan berdasarkan layanan",
+        "pendapatan berdasarkan segmen usaha",
+        "pendapatan berdasarkan divisi",
+        "pendapatan berdasarkan wilayah geografis",
+        "pendapatan berdasarkan negara",
+        "pendapatan berdasarkan area",
+        "rincian pendapatan",
+        "analisis segmen",
+        "catatan informasi segmen",
+        "pendapatan per segmen",
+        "pendapatan per wilayah", "pendapatan per divisi",
+    ]
+
+    QUERY_MAP = {
+        Lang.EN: queries_EN,
+        Lang.ZH_SIM: queries_ZH_SIM,
+        Lang.ZH_TR: queries_ZH_TR,
+        Lang.IN: queries_IN
+    }
+
+    context_2024 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2024)
+    context_2023 = retrieve_relevant_text(QUERY_MAP[TARGET_LANGUAGE], top_k, md_file_2023)
+    
+    prompt_2024 = get_s2_5_prompt(context_2024)
+    prompt_2023 = get_s2_5_prompt(context_2023)
+    
+    response_2024 = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
+            {"role": "user", "content": prompt_2024}
+        ],
+        temperature=0
+    )
+
+    response_2023 = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a precise financial data extractor. Return only JSON."},
+            {"role": "user", "content": prompt_2023}
+        ],
+        temperature=0
+    )
+
+    data_2024 = _safe_json_from_llm(response_2024.choices[0].message.content)
+    data_2023 = _safe_json_from_llm(response_2023.choices[0].message.content)
+    print(f"DEBUG - S2.5 2024 extraction result: {data_2024}")
+    merged = merge_revenue_dicts(data_2024, data_2023)
+    return merged
+
 # ===================== Section 3: Business Analysis =====================  
           
 def extract_s3_1(report, model: str = "gpt-4.1-mini"):
@@ -2653,11 +2768,11 @@ def extract_s3_1(report, model: str = "gpt-4.1-mini"):
     multiplier = getattr(report.income_statement, "primary_multiplier", "Millions")
     currency = getattr(report.income_statement, "primary_currency", "USD")
     
-    income_currency_code = getattr(report.income_statement, "primary_currency", getattr(report, "currency_code", "USD"))
-    income_multiplier_label = getattr(report.income_statement, "primary_multiplier", "Millions")
+    # income_currency_code = getattr(report.income_statement, "primary_currency", getattr(report, "currency_code", "USD"))
+    # income_multiplier_label = getattr(report.income_statement, "primary_multiplier", "Millions")
 
-    currency_cn_sim, multiplier_cn_sim = to_zh_labels(income_currency_code, income_multiplier_label, trad=False)
-    currency_cn_tr,  multiplier_cn_tr  = to_zh_labels(income_currency_code, income_multiplier_label, trad=True)
+    # currency_cn_sim, multiplier_cn_sim = to_zh_labels(income_currency_code, income_multiplier_label, trad=False)
+    # currency_cn_tr,  multiplier_cn_tr  = to_zh_labels(income_currency_code, income_multiplier_label, trad=True)
         
     # sufficient?
     financial_context = f"""
@@ -2774,8 +2889,9 @@ def extract_s3_1(report, model: str = "gpt-4.1-mini"):
         }}
 
         【计量信息】
-        - 币种：{currency_cn_sim}
-        - 数量级：{multiplier_cn_sim}
+        - 币种：{currency}
+        - 数量级：{multiplier}
+        - 若数据单位为“元”或数值过大，请自动换算为"千万"或"亿"，并在输出中注明“人民币 {currency}（以亿为单位）”。
         - 若存在【DERIVED】，仅引用其中已计算好的同比/变化值；**不要自行重新计算**。
 
         FINANCIAL DATA
@@ -2819,8 +2935,9 @@ def extract_s3_1(report, model: str = "gpt-4.1-mini"):
         }}
 
         【計量資訊】
-        - 幣別：{currency_cn_tr}
-        - 數量級：{multiplier_cn_tr}
+        - 幣別：{currency}
+        - 數量級：{multiplier}
+        - 若資料單位為「元」或數值過大，請自動換算為「千萬」或「億」，並在輸出中註明「人民幣 {currency}（以億為單位）」。
         - 若存在【DERIVED】，僅引用其中已計算之同比／變化值；**不要自行重新計算**。
 
         FINANCIAL DATA
@@ -2937,7 +3054,7 @@ def build_financial_context_s3_2(report, year: int):
     return context
     
     
-def build_prompt_for_year(year: int, financial_context: str):
+def build_s3_2_prompt(year: int, financial_context: str):
 
     if TARGET_LANGUAGE == Lang.EN:
         prompt = f"""
@@ -2966,7 +3083,8 @@ def build_prompt_for_year(year: int, financial_context: str):
             "future_financial_performance_projection_{year}": "Detailed analysis for {year}"
         }}
 
-        FINANCIAL DATA (current year plus any reference years):
+        COMPANY: {COMPANY_NAME}
+        FINANCIAL DATA:
         {financial_context}
         """.strip()
                 
@@ -3049,8 +3167,8 @@ def build_prompt_for_year(year: int, financial_context: str):
 def extract_s3_2(report, model: str = "gpt-4.1-mini"):
                 
     prompts = {
-        2024: build_prompt_for_year(2024, build_financial_context_s3_2(report, 2024)),
-        2023: build_prompt_for_year(2023, build_financial_context_s3_2(report, 2023))
+        2024: build_s3_2_prompt(2024, build_financial_context_s3_2(report, 2024)),
+        2023: build_s3_2_prompt(2023, build_financial_context_s3_2(report, 2023))
     }
         
     results = {}
@@ -3377,19 +3495,6 @@ def extract_s4_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: s
     print("🔍 Searching for Risk Factors information in 2023 report...")
     context_2023 = retrieve_relevant_text(risk_queries, top_k, md_file_2023)
     
-    if len(context_2023) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2023 {len(context_2023)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    if len(context_2024) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-    
     # Extract Risk Factors for 2024
     result_2024 = _extract_risk_factors_single_year(context_2024, "2024", model)
     # Extract Risk Factors for 2023
@@ -3539,7 +3644,7 @@ def _extract_risk_factors_single_year(context: str, year: str, model: str):
 
 # ===================== Section 5: Corporate Governance =====================
         
-def extract_s5_1(md_file_2024: str, top_k: int = 15, model: str = "gpt-4o-mini"):
+def extract_s5_1(md_file_2024: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
     """
     Extract Section 5.1 Board Composition using RAG search.
     Analyzes Name, Position, and Total Income for board members from 2024 report only.
@@ -3555,7 +3660,8 @@ def extract_s5_1(md_file_2024: str, top_k: int = 15, model: str = "gpt-4o-mini")
             "director compensation total compensation packages",
             "key management personnel executive team",
             "board of directors executive officers leadership",
-            "CEO chairman staff executives"
+            "CEO chairman staff executives", "CEO",
+            "directors", "chairman", "president", "vice president",
             "director fees executive salaries compensation",
             "management compensation executive pay",
             "senior management team leadership positions",
@@ -3611,13 +3717,6 @@ def extract_s5_1(md_file_2024: str, top_k: int = 15, model: str = "gpt-4o-mini")
     # Search and get context for 2024 only
     print("🔍 Searching for Board Composition information in 2024 report...")
     context_2024 = retrieve_relevant_text(board_queries, top_k, md_file_2024)
-    
-    if len(context_2024) > 350_000:
-        print(f"===========================================================================")
-        print(f"===========================================================================")
-        print(f"[WARN] Context length 2024 {len(context_2024)} exceeds 350_000 characters, truncating.")
-        print(f"===========================================================================")
-        print(f"===========================================================================")
     
     # Extract Board Composition for 2024
     result = _extract_board_composition(context_2024, model)
@@ -4021,7 +4120,7 @@ def _extract_internal_controls_single_year(context: str, year: str, model: str):
 
 # ===================== Section 6: Future Outlook =====================
 
-def extract_s6_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4o-mini"):
+def extract_s6_1(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
     """
     Extract Section 6.1 Strategic Direction using RAG search.
     Analyzes Mergers and Acquisition, New technologies, and Organisational Restructuring 
@@ -4241,7 +4340,7 @@ def _extract_strategic_direction_single_year(context: str, year: str, model: str
         print(f"Error in _extract_strategic_direction_single_year for {year}: {e}")
 
 
-def extract_s6_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4o-mini"):
+def extract_s6_2(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
     """
     Extract Section 6.2 Challenges and Uncertainties using RAG search.
     Analyzes Economic challenges and Competitive pressures for both 2024 and 2023 reports.
@@ -4452,7 +4551,7 @@ def _extract_challenges_uncertainties_single_year(context: str, year: str, model
         print(f"Error in _extract_challenges_uncertainties_single_year for {year}: {e}")
 
         
-def extract_s6_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4o-mini"):
+def extract_s6_3(md_file_2024: str, md_file_2023: str, top_k: int = 15, model: str = "gpt-4.1-mini"):
     """
     Extract Section 6.3 Innovation and Development Plans using RAG search.
     Analyzes R&D investments and New product launches for both 2024 and 2023 reports.
@@ -4734,7 +4833,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("📋 PROCESSING: S1.1 - Basic Information (2024 with RAG)")
     print("="*60)
     
-    company_name, establishment_date, headquarters = extract_s1_1(md_file_2024, top_k=20, model="gpt-4o-mini")
+    company_name, establishment_date, headquarters = extract_s1_1(md_file_2024, top_k=20, model="gpt-4.1-mini")
 
     report.basic_info.company_name = company_name
     report.basic_info.establishment_date = establishment_date
@@ -4830,7 +4929,9 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
 
     report.income_statement.primary_currency = income_data.get("currency", "N/A")
     report.income_statement.primary_multiplier = income_data.get("multiplier", "N/A")
-
+    
+    set_currency_code(report.income_statement.primary_currency)
+    set_multiplier(report.income_statement.primary_multiplier)
     
     print("✅ S2.1 Income Statement completed")
     print(f"   Revenue 2024: {income_data['2024']['revenue']} | 2023: {income_data['2023']['revenue']}")
@@ -5152,7 +5253,7 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     print("="*60)
 
     # Extract board composition using RAG search (2024 only)
-    board_composition = extract_s5_1(md_file_2024, top_k=8, model="gpt-4.1-mini")
+    board_composition = extract_s5_1(md_file_2024, top_k=15, model="gpt-4.1-mini")
 
     # Save to report structure (you'll need to add these fields to your CompanyReport dataclass)
     report.board_composition.members = board_composition["board_members"]

@@ -502,26 +502,45 @@ class DDRGenerator:
 
     # ------------------ Section 5 ------------------
     def _format_money(self, value, currency_symbol="$"):
-        if value in (None, "N/A"):
+        if value is None or value == "N/A":
             return "N/A"
+
         s = str(value).strip()
         if s == "":
             return "N/A"
-        neg = s.startswith("(") and s.endswith(")")
-        s = s.strip("() ").strip()
-        if s and s[0] in ("£", "$", "€"):
-            s = s[1:].strip()
-        has_k = s.lower().endswith("k")
+
+        paren_negative = s.startswith("(") and s.endswith(")")
+        s_core = s.strip("() ").strip()
+
+        # Strip a leading currency symbol
+        if len(s_core) > 0 and s_core[0] in ("£", "$", "€", "¥"):
+            s_core = s_core[1:].strip()
+
+        has_k = s_core.lower().endswith("k")
         if has_k:
-            s = s[:-1].strip()
-        s_clean = s.replace(",", "").replace(" ", "")
+            s_core = s_core[:-1].strip()
+
+        s_clean = s_core.replace(",", "").replace(" ", "")
+
         try:
             num = float(s_clean)
         except Exception:
-            return value
-        num_full = int(round(num * 1_000))
-        out = f"{num_full:,}"
-        return f"({currency_symbol}{out})" if neg else f"{currency_symbol}{out}"
+            return value  # fall back to original
+
+        # Apply the 'k' scale only when present
+        if has_k:
+            num = num * 1_000.0
+
+        # Normalize negativity: parentheses win; otherwise use sign
+        is_negative = paren_negative or num < 0
+        abs_str = f"{abs(num):,.2f}".rstrip("0").rstrip(".")
+        out = abs_str
+
+        if is_negative:
+            return f"({currency_symbol}{out})"
+        else:
+            return f"{currency_symbol}{out}"
+
 
     def generate_section_5(self) -> str:
         board_composition = self.report.board_composition
@@ -635,12 +654,3 @@ class DDRGenerator:
             f.write(report_content)
 
         print(f"Report saved to: {output_path}")
-
-# ------------------ Main Entry ------------------
-if __name__ == "__main__":
-    sample_report = DDRGenerator.create_sample_report()
-    generator = DDRGenerator(sample_report)
-    output_file = "artifacts/sample_financial_report.md"
-    generator.save_report(output_file)
-    print("Sample report generated successfully!")
-    print(f"Check the file: {output_file}")

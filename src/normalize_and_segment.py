@@ -164,5 +164,5 @@ def normalize_and_segment_markdown(markdown_text, doc_filename):
             }
             f.write(json.dumps(record, ensure_ascii=False) + '\n')
 
-    print(f"JSONL saved to: {jsonl_file}")
+    print(f"        JSONL saved to: {jsonl_file}")
     return sections

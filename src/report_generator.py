@@ -630,7 +630,6 @@ class DDRGenerator:
 """
         return dedent(md).strip() + "\n"
 
-    # ------------------ Combine and Save ------------------
     def generate_full_report(self) -> str:
         """Generate complete markdown report"""
         sections = [

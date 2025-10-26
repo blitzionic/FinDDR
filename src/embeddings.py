@@ -93,7 +93,7 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
     npz_file = f"{output_prefix}.npz"
     
     if Path(faiss_file).exists() and Path(npz_file).exists():
-        print(f"✅ Embeddings already exist at {output_prefix}.faiss/.npz")
+        print(f"      ✅ Embeddings already exist at {output_prefix}.faiss/.npz")
         return
 
     # Load markdown
@@ -160,8 +160,8 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
 
     # inside build_section_embeddings(...) before the loop
     enc = tiktoken.encoding_for_model("text-embedding-3-large")
-    MAX_TOKENS = 8000          # model limit 8192; keep margin
-    CHUNK_OVERLAP = 128       # small overlap to avoid boundary loss
+    MAX_TOKENS = 8000       
+    CHUNK_OVERLAP = 128     
 
     def _embed_chunk(text: str) -> np.ndarray:
         for attempt in range(5):
@@ -283,72 +283,6 @@ def append_next_sections(md_file: str, current_section_id: str, num_next: int = 
             combined_text += "\n\n" + next_text
 
     return combined_text
-
-    
-# if __name__ == "__main__":
-#     import argparse
-#     import sys
-#     from pathlib import Path
-
-#     parser = argparse.ArgumentParser(
-#         description="Build FAISS embeddings for a Markdown + JSONL section pair."
-#     )
-
-#     parser.add_argument(
-#         "--jsonl",
-#         type=str,
-#         required=True,
-#         help="Path to the JSONL file (from normalize_and_segment_markdown)."
-#     )
-
-#     parser.add_argument(
-#         "--md",
-#         type=str,
-#         required=True,
-#         help="Path to the Markdown file corresponding to the JSONL."
-#     )
-
-#     parser.add_argument(
-#         "--force",
-#         action="store_true",
-#         help="Force rebuild even if FAISS/NPZ already exist."
-#     )
-
-#     args = parser.parse_args()
-
-#     jsonl_file = Path(args.jsonl)
-#     md_file = Path(args.md)
-
-#     if not jsonl_file.exists():
-#         print(f"❌ JSONL file not found: {jsonl_file}")
-#         sys.exit(1)
-#     if not md_file.exists():
-#         print(f"❌ Markdown file not found: {md_file}")
-#         sys.exit(1)
-
-#     # Derive output prefix
-#     out_prefix = md_file.stem
-
-#     print(f"📘 Building embeddings for:")
-#     print(f"   JSONL: {jsonl_file}")
-#     print(f"   Markdown: {md_file}")
-#     print(f"   Output prefix: {out_prefix}")
-
-#     # If force flag provided, remove existing files
-#     faiss_path = Path(f"data/embeddings/{out_prefix}.faiss")
-#     npz_path = Path(f"data/embeddings/{out_prefix}.npz")
-#     if args.force:
-#         if faiss_path.exists():
-#             faiss_path.unlink()
-#         if npz_path.exists():
-#             npz_path.unlink()
-
-#     # Build embeddings
-#     build_section_embeddings(str(jsonl_file), str(md_file), output_prefix=out_prefix)
-
-#     print("\n✅ Embedding build completed successfully.")
-
-    
     
 if __name__ == "__main__":
     import sys

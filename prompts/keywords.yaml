@@ -1,0 +1,1187 @@
+s1_1:
+  search_queries:
+    EN:
+      - company name
+      - company information
+      - company details
+      - headquarters
+      - company name establishment date headquarters
+      - establishment date
+      - founders
+      - location
+      - company profile basic information
+      - about the company history founding
+      - corporate information establishment
+      - principal office
+
+    ZH_SIM:
+      - 公司名称 成立时间 总部
+      - 公司简介 基本信息
+      - 公司历史 创立 关于公司
+      - 企业信息 成立
+      - 公司全称 法定名称
+      - 注册地址 办公地址 总部地址
+      - 成立日期 注册时间 设立时间
+      - 注册资本 成立年份
+      - 主要办事处 营业地址
+      - 总部
+
+    ZH_TR:
+      - 公司名稱 成立時間 總部
+      - 公司簡介 基本資訊
+      - 公司歷史 創立 關於公司
+      - 企業資訊 成立
+      - 設立時間
+      - 註冊地址
+      - 辦公地址 總部地址
+
+    IN:
+      - nama perusahaan
+      - tanggal pendirian
+      - kantor pusat
+      - tempat pendaftaran
+      - profil perusahaan informasi dasar
+      - tentang perusahaan sejarah pendirian
+      - informasi korporat pendirian
+      - company name
+      - company information
+      - company details
+      - headquarters
+      - company name establishment date headquarters
+      - establishment date
+      - founders
+      - location
+      - company profile basic information
+      - about the company history founding
+      - corporate information establishment
+      - principal office
+
+s1_2:
+  search_queries:
+    EN:
+      - Innovation Advantages
+      - innovation technology R&D research development
+      - digital transformation AI artificial intelligence
+      - product development new products innovation
+      - product advantages
+      - product portfolio market leadership brands
+      - product quality safety standards
+      - product categories market share
+      - brand recognition
+      - brand recognition market leader awards
+      - brand equity consumer loyalty
+      - brand portfolio marketing campaigns
+      - reputation ratings
+      - company reputation awards recognition
+      - corporate responsibility sustainability ESG
+      - stakeholder trust credibility ratings
+
+    ZH_SIM:
+      - 创新 技术 研发 研究 开发
+      - 数字化转型 人工智能 AI
+      - 产品开发 新产品 创新
+      - 产品组合 市场领导地位 品牌
+      - 产品质量 安全标准
+      - 产品类别 市场份额
+      - 品牌认可度 市场领导者 奖项
+      - 品牌价值 消费者忠诚度
+      - 品牌组合 营销活动
+      - 公司声誉 奖项 认可
+      - 企业责任 可持续发展 ESG
+      - 利益相关方信任 信誉评级
+      - 核心技术 专利技术 知识产权
+      - 产品质量 产品认证 质量标准
+      - 品牌价值 客户忠诚度 市场口碑
+      - 行业地位 企业荣誉 资质认证
+
+    ZH_TR:
+      - 創新 技術 研發 研究 開發
+      - 數字化轉型 人工智慧 AI
+      - 產品開發 新產品 創新
+      - 產品組合 市場領導地位 品牌
+      - 產品質量 安全標準
+      - 產品類別 市場份額
+      - 品牌認可度 市場領導者 獎項
+      - 品牌價值 消費者忠誠度
+      - 品牌組合 營銷活動
+      - 公司聲譽 獎項 認可
+      - 企業責任 可持續發展 ESG
+      - 利益相關方信任 信譽評級
+
+    IN:
+      - Innovation Advantages
+      - innovation technology R&D research development
+      - digital transformation AI artificial intelligence
+      - product development new products innovation
+      - keunggulan inovasi
+      - inovasi teknologi penelitian dan pengembangan
+      - transformasi digital kecerdasan buatan AI
+      - pengembangan produk produk baru inovasi
+      - product advantages
+      - product portfolio market leadership brands
+      - product quality safety standards
+      - product categories market share
+      - keunggulan produk
+      - portofolio produk kepemimpinan pasar merek
+      - kualitas produk standar keamanan
+      - kategori produk pangsa pasar
+      - brand recognition
+      - brand recognition market leader awards
+      - brand equity consumer loyalty
+      - brand portfolio marketing campaigns
+      - pengakuan merek
+      - pengakuan merek pemimpin pasar penghargaan
+      - ekuitas merek loyalitas konsumen
+      - portofolio merek kampanye pemasaran
+      - reputation ratings
+      - company reputation awards recognition
+      - corporate responsibility sustainability ESG
+      - stakeholder trust credibility ratings
+      - reputasi perusahaan
+      - penilaian reputasi penghargaan pengakuan
+      - tanggung jawab perusahaan keberlanjutan ESG
+      - kepercayaan pemangku kepentingan kredibilitas penilaian
+
+s1_3:
+  search_queries:
+    EN:
+      - core values
+      - mission statement
+      - company mission statement
+      - our mission
+      - mission
+      - vision statement
+      - company vision statement
+      - our vision
+      - vision future
+      - purpose
+      - innovation mission vision values
+      - integrity
+      - collaboration
+      - diversity inclusion
+      - core values principles
+      - corporate values
+      - company values beliefs
+
+    ZH_SIM:
+      - 公司使命
+      - 我们的使命
+      - 使命
+      - 公司愿景
+      - 我们的愿景
+      - 愿景 未来
+      - 核心价值观
+      - 企业价值观
+      - 公司价值观 理念
+
+    ZH_TR:
+      - 公司使命
+      - 我們的使命
+      - 使命
+      - 公司願景
+      - 我們的願景
+      - 願景 未來
+      - 核心價值觀
+      - 企業價值觀
+      - 公司價值觀 理念
+
+    IN:
+      - nilai inti
+      - nilai utama
+      - nilai perusahaan
+      - nilai korporasi
+      - misi
+      - pernyataan misi
+      - misi perusahaan
+      - misi kami
+      - visi
+      - pernyataan visi
+      - visi perusahaan
+      - visi kami
+      - visi masa depan
+      - misi dan visi
+      - visi dan misi
+      - visi misi perusahaan
+      - inovasi
+      - integritas
+      - kolaborasi
+      - keragaman dan inklusi
+      - prinsip nilai
+      - keyakinan perusahaan
+      - nilai-nilai organisasi
+      - etos kerja
+
+s2_1:
+  search_queries:
+    EN:
+      - income statement
+      - profit and loss
+      - P&L statement
+      - revenue
+      - financial highlights
+      - gross profit
+      - sales
+      - cost of goods sold
+      - operating expenses
+      - operating income
+      - net profit net income
+      - segmental analysis
+      - income before taxes
+      - tax expense
+      - interest expense
+      - financial year end
+      - consolidated income statement
+      - statement of comprehensive income
+      - retained earnings
+      - consolidated balance sheet
+      - shareholder's equity
+
+    ZH_SIM:
+      - 利润表
+      - 损益表
+      - 收入报表
+      - 营业收入 收入
+      - 营业成本 销售成本
+      - 毛利润
+      - 营业费用
+      - 营业利润
+      - 净利润
+      - 税前利润
+      - 所得税费用
+      - 利息费用
+      - 合并利润表
+      - 综合收益表
+      - 税前利润 利润总额
+      - 所得税费用 税费
+      - 财务费用 利息支出
+      - 投资收益
+      - 其他业务收入 投资收益
+      - 利润表 收入 成本 利润
+      - 收入 成本 利润 净利润
+      - 税前利润 所得税费用
+      - 综合收益表 利润总额
+
+    ZH_TR:
+      - 利潤表
+      - 損益表
+      - 收入報表
+      - 營業收入 收入
+      - 營業成本 銷售成本
+      - 毛利潤
+      - 營業費用
+      - 營業利潤
+      - 淨利潤
+      - 稅前利潤
+      - 所得稅費用
+      - 利息費用
+      - 合併利潤表
+      - 綜合收益表
+      - 營業利潤
+      - 營業費用
+      - 綜合收益
+      - 毛利潤
+      - 銷售成本
+      - 成本費用
+      - 利潤表 收入 成本 利潤
+      - 收入 成本 利潤 淨利潤
+      - 稅前利潤 所得稅費用
+      - 綜合收益表 利潤總額
+      - 其他業務收入 投資收益 公允價值變動
+
+    IN:
+      - income statement
+      - profit and loss
+      - P&L statement
+      - revenue
+      - financial highlights
+      - gross profit
+      - sales
+      - cost of goods sold
+      - operating expenses
+      - operating income
+      - net profit net income
+      - income before taxes
+      - tax expense
+      - interest expense
+      - financial year end
+      - consolidated income statement
+      - statement of comprehensive income
+      - retained earnings
+      - consolidated balance sheet
+      - shareholder's equity
+      - laporan laba rugi
+      - laporan pendapatan
+      - pendapatan
+      - penjualan
+      - laba kotor
+      - beban pokok penjualan
+      - beban operasional
+      - laba operasi
+      - laba bersih
+      - laba sebelum pajak
+      - beban pajak penghasilan
+      - beban bunga
+      - tahun buku berakhir
+      - laporan laba rugi konsolidasian
+      - laporan laba rugi komprehensif
+      - ikhtisar keuangan
+
+s2_2:
+  search_queries:
+    EN:
+      - balance sheet
+      - statement of financial position
+      - consolidated balance sheet
+      - consolidated financial statement
+      - total assets
+      - financial highlights
+      - financial results
+      - financial position
+      - current assets
+      - non-current assets
+      - property plant equipment
+      - bank borrowing
+      - investments
+      - total liabilities
+      - current liabilities
+      - non-current liabilities
+      - total equity
+      - shareholders equity
+      - stockholders equity
+      - retained earnings
+      - share capital
+      - prepaid expenses
+      - consolidated statement of changes in equity
+      - inventories
+
+    ZH_SIM:
+      - 资产负债表
+      - 财务状况表
+      - 合并资产负债表
+      - 资产总计
+      - 流动资产
+      - 非流动资产
+      - 固定资产
+      - 负债合计
+      - 流动负债
+      - 非流动负债
+      - 股东权益
+      - 所有者权益
+      - 权益总计
+      - 未分配利润
+      - 股本
+      - 实收资本
+      - 货币资金 现金及现金等价物
+      - 应收账款 预付款项 其他应收款
+      - 存货 库存商品
+      - 固定资产 无形资产 长期资产
+      - 应付账款 短期借款 长期借款
+      - 未分配利润 留存收益
+      - 负债和所有者权益总计
+
+    ZH_TR:
+      - 資產負債表
+      - 財務狀況表
+      - 合併資產負債表
+      - 資產總計
+      - 流動資產
+      - 非流動資產
+      - 固定資產
+      - 負債合計
+      - 流動負債
+      - 非流動負債
+      - 股東權益
+      - 所有者權益
+      - 權益總計
+      - 未分配利潤
+      - 股本
+      - 實收資本
+
+    IN:
+      - balance sheet
+      - statement of financial position
+      - consolidated balance sheet
+      - total assets
+      - financial highlights
+      - financial results
+      - financial position
+      - current assets
+      - non-current assets
+      - property plant equipment
+      - bank borrowing
+      - investments
+      - total liabilities
+      - current liabilities
+      - non-current liabilities
+      - total equity
+      - shareholders equity
+      - stockholders equity
+      - retained earnings
+      - share capital
+      - prepaid expenses
+      - consolidated statement of changes in equity
+      - inventories
+      - neraca
+      - laporan posisi keuangan
+      - laporan keuangan konsolidasian
+      - total aset
+      - aset lancar
+      - aset tidak lancar
+      - aset tetap
+      - jumlah kewajiban
+      - liabilitas lancar
+      - liabilitas jangka panjang
+      - kewajiban jangka panjang
+      - ekuitas total
+      - ekuitas pemegang saham
+      - ekuitas pemilik
+      - laba ditahan
+      - modal saham
+      - modal disetor
+      - posisi keuangan
+
+s2_3:
+  search_queries:
+    EN:
+      - cash flow statement
+      - statement of cash flows
+      - consolidated cash flow statement
+      - consolidated statement of cash flows
+      - net cash from operating activities
+      - net cash from investing activities
+      - net cash from financing activities
+      - net increase in cash
+      - net decrease in cash
+      - dividends paid
+      - cash and cash equivalents
+      - summary of cash flows
+      - cash generated by operations
+      - net increase in cash
+      - net change in cash and cash equivalents
+      - dividends
+      - interest paid
+      - interest received
+      - dividend vouchers
+      - cash inflows cash outflows
+      - cash receipts cash payments
+
+    ZH_SIM:
+      - 现金流量表
+      - 合并现金流量表
+      - 现金流量状况表
+      - 经营活动产生的现金流量净额
+      - 投资活动产生的现金流量净额
+      - 筹资活动产生的现金流量净额
+      - 现金及现金等价物净增加额
+      - 现金净流入 净流出
+      - 分红 股息 支付
+      - 现金及现金等价物
+      - 现金流入 现金流出
+      - 股利支付 分红派息
+      - 分红
+      - 股息
+      - 派息
+      - 利息支付
+      - 利息收入
+      - 支付利息
+      - 现金流量汇总表
+      - 现金流量概览
+
+    ZH_TR:
+      - 現金流量表
+      - 合併現金流量表
+      - 現金流量狀況表
+      - 營運活動產生之現金流量淨額
+      - 投資活動產生之現金流量淨額
+      - 籌資活動產生之現金流量淨額
+      - 現金及約當現金淨增加額
+      - 現金淨流入 淨流出
+      - 股息 分紅 支付
+      - 現金及約當現金
+      - 現金淨變化
+      - 現金增加
+      - 現金減少
+      - 股息
+      - 分紅
+      - 派息
+      - 股利支付
+      - 現金流量概覽
+
+    IN:
+      - cash flow statement
+      - statement of cash flows
+      - consolidated cash flow statement
+      - consolidated statement of cash flows
+      - net cash from operating activities
+      - net cash from investing activities
+      - net cash from financing activities
+      - net increase in cash
+      - net decrease in cash
+      - dividends paid
+      - cash and cash equivalents
+      - summary of cash flows
+      - cash generated by operations
+      - net increase in cash
+      - net change in cash and cash equivalents
+      - dividends
+      - interest paid
+      - interest received
+      - dividend vouchers
+      - cash inflows cash outflows
+      - cash receipts cash payments
+      - laporan arus kas
+      - laporan arus kas konsolidasian
+      - arus kas
+      - arus kas dari aktivitas operasi
+      - arus kas dari aktivitas investasi
+      - arus kas dari aktivitas pendanaan
+      - kenaikan bersih kas
+      - penurunan bersih kas
+      - pembayaran dividen
+      - kas dan setara kas
+      - arus kas bersih
+      - arus kas masuk keluar
+      - laporan arus kas gabungan
+
+s2_5:
+  search_queries:
+    EN:
+      - revenue by product
+      - revenue by service
+      - revenue by business segment
+      - revenue by division
+      - revenue by geographic region
+      - revenue by geographic segments
+      - revenue by geographical segments
+      - regional revenue
+      - revenue by country
+      - revenue by area
+      - revenue breakdown
+      - locational revenue
+      - segmental analysis
+      - note segment information
+      - revenue by channel
+      - online vs offline revenue
+      - top customers revenue
+      - concentration of revenue
+
+    ZH_SIM:
+      - 按产品划分的收入
+      - 按业务分部的收入
+      - 按地区划分的收入
+      - 按国家划分的收入
+      - 分部信息
+      - 分部收入
+      - 区域收入
+      - 收入构成
+      - 收入拆分
+      - 收入分解
+      - 按地域划分的收入
+      - 营业收入
+
+    ZH_TR:
+      - 按產品劃分的收入
+      - 按業務分部的收入
+      - 按地區劃分的收入
+      - 按國家劃分的收入
+      - 分部資訊
+      - 分部收入
+      - 區域收入
+      - 收入構成
+      - 收入拆分
+      - 收入分解
+      - 海外收入
+      - 分部報告
+      - 出口銷售收入
+
+    IN:
+      - revenue by product
+      - revenue by service
+      - revenue by business segment
+      - revenue by division
+      - revenue by geographic region
+      - revenue by geographic segments
+      - revenue by geographical segments
+      - revenue by country
+      - revenue by area
+      - revenue breakdown
+      - segmental analysis
+      - note segment information
+      - pendapatan berdasarkan produk
+      - pendapatan berdasarkan layanan
+      - pendapatan berdasarkan segmen usaha
+      - pendapatan berdasarkan divisi
+      - pendapatan berdasarkan wilayah geografis
+      - pendapatan berdasarkan negara
+      - pendapatan berdasarkan area
+      - rincian pendapatan
+      - analisis segmen
+      - catatan informasi segmen
+      - pendapatan per segmen
+      - pendapatan per wilayah
+      - pendapatan per divisi
+
+s3_3:
+  search_queries:
+    EN:
+      - business model
+      - market position
+      - business model revenue streams profit generation
+      - revenue sources income generation business operations
+      - business strategy core business segments operations
+      - value creation revenue model profit model
+      - business approach operational model service delivery
+      - monetization strategy business framework
+      - market position market share competitive advantage
+      - market leadership industry position competitive standing
+      - market dominance market leader competitive landscape
+      - competitive positioning industry leadership market presence
+      - market share data competitive analysis industry ranking
+      - market dynamics competitive environment industry position
+
+    ZH_SIM:
+      - 商业模式
+      - 盈利模式
+      - 收入来源
+      - 业务运营 营收模式 盈利方式
+      - 商业策略 核心业务 运营模式
+      - 价值创造 收入模式 利润模式
+      - 商业方法 运营框架 服务交付
+      - 变现策略 商业框架
+      - 市场地位 市场份额 竞争优势
+      - 市场领导地位 行业地位 竞争地位
+      - 市场主导地位 市场领导者 竞争格局
+      - 竞争定位 行业领导地位 市场存在
+      - 市场份额数据 竞争分析 行业排名
+      - 市场动态 竞争环境 行业地位
+
+    ZH_TR:
+      - 商業模式
+      - 獲利模式
+      - 收入來源
+      - 業務營運 營收模式 獲利方式
+      - 商業策略 核心業務 營運模式
+      - 價值創造 收入模式 利潤模式
+      - 商業方法 營運框架 服務交付
+      - 變現策略 商業框架
+      - 市場地位 市場份額 競爭優勢
+      - 市場領導地位 行業地位 競爭地位
+      - 市場主導地位 市場領導者 競爭格局
+      - 競爭定位 行業領導地位 市場存在
+      - 市場份額資料 競爭分析 行業排名
+      - 市場動態 競爭環境 行業地位
+
+    IN:
+      - business model
+      - market position
+      - competitive advantage
+      - business segments
+      - value creation
+      - revenue streams
+      - profit generation
+      - market share analysis
+      - industry position
+      - competitive landscape
+      - market dynamics
+      - model bisnis
+      - posisi pasar
+      - strategi bisnis
+      - segmen bisnis utama
+      - sumber pendapatan
+      - arus pendapatan
+      - penciptaan nilai
+      - kerangka bisnis
+      - pendekatan bisnis
+      - model operasional
+      - strategi monetisasi
+      - keunggulan kompetitif
+      - kepemimpinan pasar
+      - posisi industri
+      - dominasi pasar
+      - analisis segmen pasar
+      - pesaing utama
+      - analisis persaingan
+      - lingkungan kompetitif
+      - pemosisian kompetitif
+      - pangkat industri
+      - peta persaingan
+
+s4_1:
+  search_queries:
+    EN:
+      - market risks
+      - operational risks
+      - market risks market volatility economic conditions competition
+      - operational risks business operations manufacturing supply chain
+      - financial risks credit risk liquidity risk interest rate foreign exchange
+      - compliance risks regulatory compliance legal requirements laws regulations
+      - risk factors risk management enterprise risk principal risks
+      - market competition competitive landscape industry risks
+      - operational disruption business continuity operational challenges
+      - financial exposure financial instruments currency hedging
+      - regulatory environment legal compliance statutory requirements
+      - risks and uncertainties forward looking statements risk assessment
+
+    ZH_SIM:
+      - 市场风险 市场波动 经济条件 竞争风险
+      - 运营风险 业务运营 制造风险 供应链风险
+      - 财务风险 信用风险 流动性风险 利率风险 汇率风险
+      - 合规风险 监管合规 法律要求 法规风险
+      - 风险因素 风险管理 企业风险 主要风险
+      - 市场竞争 竞争格局 行业风险
+      - 运营中断 业务连续性 运营挑战
+      - 金融敞口 金融工具 货币对冲
+      - 监管环境 法律合规 法定要求
+      - 风险和不确定性 前瞻性陈述 风险评估
+
+    ZH_TR:
+      - 市場風險 市場波動 經濟條件 競爭風險
+      - 營運風險 業務營運 製造風險 供應鏈風險
+      - 財務風險 信用風險 流動性風險 利率風險 匯率風險
+      - 合規風險 監管合規 法律要求 法規風險
+      - 風險因素 風險管理 企業風險 主要風險
+      - 市場競爭 競爭格局 行業風險
+      - 營運中斷 業務連續性 營運挑戰
+      - 金融敞口 金融工具 貨幣對沖
+      - 監管環境 法律合規 法定要求
+      - 風險和不確定性 前瞻性陳述 風險評估
+
+    IN:
+      - market risks
+      - operational risks
+      - financial risks
+      - compliance risks
+      - enterprise risk
+      - principal risks
+      - business continuity
+      - regulatory environment
+      - risks and uncertainties
+      - risk management framework
+      - risiko pasar
+      - risiko operasional
+      - risiko keuangan
+      - risiko kepatuhan
+      - risiko kredit
+      - risiko likuiditas
+      - risiko suku bunga
+      - risiko nilai tukar
+      - risiko bisnis
+      - risiko strategis
+      - risiko hukum
+      - risiko regulasi
+      - faktor risiko
+      - manajemen risiko
+      - pengendalian risiko
+      - paparan keuangan
+      - instrumen keuangan
+      - perlindungan mata uang
+      - lingkungan regulasi
+      - kepatuhan hukum
+      - risiko dan ketidakpastian
+      - pernyataan berwawasan ke depan
+      - rantai pasokan
+      - gangguan operasional
+      - kelangsungan bisnis
+
+s5_1:
+  search_queries:
+    EN:
+      - board composition directors executive management
+      - board members directors names positions
+      - executive compensation remuneration salary income
+      - director compensation total compensation packages
+      - key management personnel executive team
+      - board of directors executive officers leadership
+      - CEO chairman staff executives
+      - CEO
+      - directors
+      - chairman
+      - president
+      - vice president
+      - director fees executive salaries compensation
+      - management compensation executive pay
+      - senior management team leadership positions
+      - corporate governance board structure
+
+    ZH_SIM:
+      - 董事会组成 董事 高管管理层
+      - 董事会成员 董事姓名 职位
+      - 高管薪酬 报酬 薪资收入
+      - 董事薪酬 总薪酬 薪酬包
+      - 关键管理人员 高管团队
+      - 董事长 总经理 领导层
+      - 董事会 高级管理人员 领导层
+      - 董事费用 高管薪资 薪酬
+      - 管理层薪酬 高管薪酬
+      - 高级管理团队 领导职位
+      - 公司治理 董事会结构
+
+    ZH_TR:
+      - 董事會組成 董事 高管管理層
+      - 董事會成員 董事姓名 職位
+      - 高管薪酬 報酬 薪資收入
+      - 董事薪酬 總薪酬 薪酬包
+      - 關鍵管理人員 高管團隊
+      - 董事會 高級管理人員 領導層
+      - 董事費用 高管薪資 薪酬
+      - 管理層薪酬 高管薪酬
+      - 高級管理團隊 領導職位
+      - 公司治理 董事會結構
+
+    IN:
+      - board composition
+      - board members
+      - directors
+      - executive management
+      - executive compensation
+      - director remuneration
+      - corporate governance
+      - senior management
+      - leadership team
+      - key management personnel
+      - komposisi dewan
+      - anggota dewan
+      - dewan direksi
+      - dewan komisaris
+      - manajemen eksekutif
+      - manajemen senior
+      - tim manajemen puncak
+      - kompensasi eksekutif
+      - remunerasi direksi
+      - gaji eksekutif
+      - tunjangan direksi
+      - penghasilan manajemen
+      - struktur tata kelola perusahaan
+      - tata kelola perusahaan
+      - ketua dewan
+      - presiden direktur
+      - CEO
+      - anggota manajemen kunci
+      - tim kepemimpinan
+      - struktur dewan
+
+s5_2:
+  search_queries:
+    EN:
+      - internal controls risk assessment procedures control activities
+      - risk management framework control environment monitoring mechanisms
+      - internal control system control procedures risk evaluation
+      - corporate governance internal audit control deficiencies
+      - risk assessment control activities monitoring effectiveness
+      - internal control effectiveness material weaknesses deficiencies
+      - control procedures risk management control framework
+      - audit committee internal controls risk committee
+      - control environment risk assessment control monitoring
+      - internal control evaluation control testing control design
+      - weaknesses in internal controls significant deficiencies
+      - material weaknesses
+      - material deficiencies
+      - control deficiency
+      - control deficiencies
+      - remediation
+      - remedial actions
+      - disclosure controls and procedures
+      - internal controls
+
+    ZH_SIM:
+      - 内部控制 风险评估程序 控制活动
+      - 风险管理框架 控制环境 监控机制
+      - 内控体系 控制程序 风险评价
+      - 公司治理 内部审计 控制缺陷
+      - 风险评估 控制活动 监控有效性
+      - 内控有效性 重大缺陷 内控缺陷
+      - 控制程序 风险管理 控制框架
+      - 审计委员会 内部控制 风险委员会
+      - 控制环境 风险评估 控制监督
+      - 内控评价 控制测试 控制设计
+      - 内部控制
+      - 重大缺陷
+      - 控制缺陷
+      - 补救措施
+      - 补救行动
+      - 披露控制和程序
+      - 管理层对内部控制的评估
+
+    ZH_TR:
+      - 內部控制 風險評估程序 控制活動
+      - 風險管理框架 控制環境 監控機制
+      - 內控體系 控制程序 風險評價
+      - 公司治理 內部審計 控制缺陷
+      - 風險評估 控制活動 監控有效性
+      - 內控有效性 重大缺陷 內控缺陷
+      - 控制程序 風險管理 控制框架
+      - 審計委員會 內部控制 風險委員會
+      - 控制環境 風險評估 控制監督
+      - 內控評價 控制測試 控制設計
+      - 內部控制
+      - 風險評估程序
+      - 控制活動
+      - 監控機制
+      - COSO 2013
+      - 重大缺陷
+      - 財務報告內部控制
+
+    IN:
+      - internal controls
+      - risk management framework
+      - internal audit
+      - control environment
+      - monitoring mechanisms
+      - risk assessment procedures
+      - control activities
+      - audit committee
+      - risk committee
+      - governance and control effectiveness
+      - pengendalian internal
+      - sistem pengendalian internal
+      - kerangka manajemen risiko
+      - lingkungan pengendalian
+      - prosedur penilaian risiko
+      - aktivitas pengendalian
+      - pemantauan pengendalian
+      - pengujian pengendalian
+      - evaluasi pengendalian
+      - komite audit
+      - komite risiko
+      - pengawasan internal
+      - audit internal
+      - tata kelola perusahaan
+      - kelemahan material
+      - efektivitas pengendalian
+      - kekurangan pengendalian
+      - pengendalian dan kepatuhan
+      - pengendalian operasional
+
+s6_1:
+  search_queries:
+    EN:
+      - strategic direction strategic priorities strategic focus strategy
+      - mergers acquisitions M&A acquisition
+      - new technologies innovation technology development R&D research
+      - organizational restructuring talent management workforce development
+      - future strategy growth strategy business strategy expansion
+      - strategic initiatives strategic objectives strategic goals
+      - technology investment product development innovation programs
+      - organizational changes management structure talent acquisition
+      - strategic outlook future plans business development
+      - investment strategy acquisition strategy innovation strategy
+
+    ZH_SIM:
+      - 战略方向 战略重点 战略重心 发展战略
+      - 并购 收购 兼并 并购目标 战略投资
+      - 新技术 技术创新 研发 技术开发 创新
+      - 组织重组 人才管理 组织架构 人力资源
+      - 未来战略 增长战略 业务战略 扩张
+      - 战略举措 战略目标 发展目标
+      - 技术投资 产品开发 创新项目
+      - 组织变革 管理结构 人才引进
+      - 战略展望 未来规划 业务发展
+      - 投资策略 收购策略 创新策略
+
+    ZH_TR:
+      - 戰略方向 戰略重點 戰略重心 發展戰略
+      - 併購 收購 兼併 併購目標 戰略投資
+      - 新技術 技術創新 研發 技術開發 創新
+      - 組織重組 人才管理 組織架構 人力資源
+      - 未來戰略 增長戰略 業務戰略 擴張
+      - 戰略舉措 戰略目標 發展目標
+      - 技術投資 產品開發 創新項目
+      - 組織變革 管理結構 人才引進
+      - 戰略展望 未來規劃 業務發展
+      - 投資策略 收購策略 創新策略
+
+    IN:
+      - strategic direction
+      - strategic priorities
+      - strategic focus
+      - business strategy
+      - mergers acquisitions M&A
+      - new technologies
+      - organizational restructuring
+      - innovation strategy
+      - growth strategy
+      - future strategy
+      - technology development
+      - R&D research innovation programs
+      - strategic outlook
+      - future plans
+      - investment strategy
+      - arah strategis
+      - prioritas strategis
+      - fokus strategis
+      - strategi bisnis
+      - merger akuisisi
+      - M&A
+      - akuisisi perusahaan
+      - restrukturisasi organisasi
+      - inovasi teknologi
+      - pengembangan teknologi
+      - penelitian dan pengembangan
+      - manajemen talenta
+      - pengembangan tenaga kerja
+      - inisiatif strategis
+      - tujuan strategis
+      - sasaran strategis
+      - rencana masa depan
+      - strategi pertumbuhan
+      - ekspansi bisnis
+      - investasi strategis
+      - pengembangan produk
+      - restrukturisasi korporasi
+      - tata kelola strategis
+
+s6_2:
+  search_queries:
+    EN:
+      - economic challenges inflation recession consumer behavior
+      - economic uncertainty economic conditions market volatility
+      - competitive pressure competition market competition industry competition
+      - competitive challenges competitive threats competitive landscape
+      - challenges uncertainties risks future outlook economic impact
+      - inflation pressure cost inflation economic downturn recession
+      - market challenges industry challenges business challenges
+      - competitive environment competitor analysis market dynamics
+      - economic headwinds economic risks financial pressures
+      - disruptive technologies new entrants market disruption
+
+    ZH_SIM:
+      - 经济挑战 通胀 经济衰退 消费者行为
+      - 经济不确定性 经济环境 市场波动
+      - 竞争压力 市场竞争 行业竞争
+      - 竞争挑战 竞争威胁 竞争格局
+      - 挑战 不确定性 风险 未来展望 经济影响
+      - 通胀压力 成本通胀 经济下行 衰退
+      - 市场挑战 行业挑战 业务挑战
+      - 竞争环境 竞争对手 市场动态
+      - 经济逆风 经济风险 财务压力
+      - 颠覆性技术 新进入者 市场颠覆
+
+    ZH_TR:
+      - 經濟挑戰 通脹 經濟衰退 消費者行為
+      - 經濟不確定性 經濟環境 市場波動
+      - 競爭壓力 市場競爭 行業競爭
+      - 競爭挑戰 競爭威脅 競爭格局
+      - 挑戰 不確定性 風險 未來展望 經濟影響
+      - 通脹壓力 成本通脹 經濟下行 衰退
+      - 市場挑戰 行業挑戰 業務挑戰
+      - 競爭環境 競爭對手 市場動態
+      - 經濟逆風 經濟風險 財務壓力
+      - 顛覆性技術 新進入者 市場顛覆
+
+    IN:
+      - economic challenges
+      - competitive challenges
+      - market challenges
+      - business uncertainties
+      - industry risks
+      - economic headwinds
+      - market volatility
+      - competitive landscape
+      - inflation pressure
+      - disruptive technologies
+      - tantangan ekonomi
+      - tekanan inflasi
+      - resesi ekonomi
+      - perilaku konsumen
+      - ketidakpastian ekonomi
+      - kondisi ekonomi
+      - volatilitas pasar
+      - tekanan kompetitif
+      - persaingan pasar
+      - tantangan kompetitif
+      - ancaman kompetitif
+      - lingkungan kompetitif
+      - analisis pesaing
+      - tantangan industri
+      - tantangan bisnis
+      - tantangan pasar
+      - risiko ekonomi
+      - hambatan ekonomi
+      - dampak ekonomi
+      - teknologi disruptif
+      - pendatang baru
+      - gangguan pasar
+      - ketidakpastian bisnis
+      - tantangan strategis
+
+s6_3:
+  search_queries:
+    EN:
+      - R&D investments research development innovation technology advancement
+      - new product launches product development product innovation
+      - innovation plans development plans technology roadmap
+      - research and development investment technology investment
+      - product pipeline new products product launches innovation initiatives
+      - technology advancement product improvement innovation strategy
+      - R&D expenditure research spending development costs
+      - innovation programs technology development product differentiation
+      - new solutions market trends technology solutions
+      - product portfolio innovation capabilities technology focus
+      - market trends
+      - technology solutions
+      - adapting to market changes
+      - innovation focus areas
+      - future product development
+      - improving products
+      - improving services
+
+    ZH_SIM:
+      - 研发投入 研发支出 技术创新 产品开发
+      - 新产品发布 产品创新 产品推出
+      - 创新计划 发展计划 技术路线图
+      - 研究开发 技术投资 创新投资
+      - 产品管线 新产品 产品发布 创新举措
+      - 技术进步 产品改进 创新策略
+      - 研发费用 研究支出 开发成本
+      - 创新项目 技术开发 产品差异化
+      - 新解决方案 市场趋势 技术解决方案
+      - 产品组合 创新能力 技术重点
+
+    ZH_TR:
+      - 研發投入 研發支出 技術創新 產品開發
+      - 新產品發布 產品創新 產品推出
+      - 創新計劃 發展計劃 技術路線圖
+      - 研究開發 技術投資 創新投資
+      - 產品管線 新產品 產品發布 創新舉措
+      - 技術進步 產品改進 創新策略
+      - 研發費用 研究支出 開發成本
+      - 創新項目 技術開發 產品差異化
+      - 新解決方案 市場趨勢 技術解決方案
+      - 產品組合 創新能力 技術重點
+
+    IN:
+      - R&D investments
+      - research and development
+      - innovation strategy
+      - technology advancement
+      - new product launches
+      - product innovation
+      - innovation initiatives
+      - technology development
+      - R&D expenditure
+      - innovation roadmap
+      - investasi penelitian dan pengembangan
+      - investasi R&D
+      - inovasi teknologi
+      - pengembangan teknologi
+      - penelitian dan pengembangan
+      - riset dan pengembangan
+      - pengeluaran R&D
+      - biaya penelitian dan pengembangan
+      - peluncuran produk baru
+      - pengembangan produk
+      - inovasi produk
+      - rencana inovasi
+      - program inovasi
+      - inisiatif inovasi
+      - peta jalan teknologi
+      - pengembangan produk baru
+      - kemajuan teknologi
+      - peningkatan produk
+      - strategi inovasi
+      - kapabilitas inovasi
+      - fokus teknologi
+      - pengembangan diferensiasi produk
+      - solusi baru
+      - tren pasar
+      - solusi teknologi

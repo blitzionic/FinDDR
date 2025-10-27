@@ -161,7 +161,7 @@ def retrieve_relevant_text(search_queries: List[str], top_k: int, md_file: str) 
             seen_sections.add(composite_key)
             unique_results.append(result)
   
-    print(f"Final unique results: {len(unique_results)} sections")
+    # print(f"Final unique results: {len(unique_results)} sections")
     
     # Get the actual text for selected sections
     with open(f"data/parsed/{md_file}.md", "r", encoding="utf-8") as f:
@@ -2129,9 +2129,9 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     report.profitability_analysis.external_oneoff_impact = profitability_analysis["external_oneoff_impact"]
     
     print("✅ COMPLETED: S3.1 - Profitability Analysis")
-    print(f"   Revenue & Direct-Cost Analysis: {len(profitability_analysis['revenue_direct_cost_dynamics'])} chars")
-    print(f"   Operating Efficiency Analysis: {len(profitability_analysis['operating_efficiency'])} chars")
-    print(f"   External & One-Off Impact Analysis: {len(profitability_analysis['external_oneoff_impact'])} chars")
+    #print(f"   Revenue & Direct-Cost Analysis: {len(profitability_analysis['revenue_direct_cost_dynamics'])} chars")
+    #print(f"   Operating Efficiency Analysis: {len(profitability_analysis['operating_efficiency'])} chars")
+    #print(f"   External & One-Off Impact Analysis: {len(profitability_analysis['external_oneoff_impact'])} chars")
 
     # checkpoint("Section 3.1 - Profitability Analysis")
     
@@ -2156,9 +2156,9 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     fps.future_financial_performance_projection.report_2023 = financial_performance_summary["future_financial_performance_projection_2023"]
 
     print("✅ COMPLETED: S3.2 - Financial Performance Summary")
-    print(f"   Comprehensive Financial Health: 2024: {len(financial_performance_summary['comprehensive_financial_health_2024'])} chars, 2023: {len(financial_performance_summary['comprehensive_financial_health_2023'])} chars")
-    print(f"   Profitability Analysis: 2024: {len(financial_performance_summary['profitability_earnings_quality_2024'])} chars, 2023: {len(financial_performance_summary['profitability_earnings_quality_2023'])} chars")
-    print(f"   Operational Efficiency: 2024: {len(financial_performance_summary['operational_efficiency_2024'])} chars, 2023: {len(financial_performance_summary['operational_efficiency_2023'])} chars")
+    # print(f"   Comprehensive Financial Health: 2024: {len(financial_performance_summary['comprehensive_financial_health_2024'])} chars, 2023: {len(financial_performance_summary['comprehensive_financial_health_2023'])} chars")
+    # print(f"   Profitability Analysis: 2024: {len(financial_performance_summary['profitability_earnings_quality_2024'])} chars, 2023: {len(financial_performance_summary['profitability_earnings_quality_2023'])} chars")
+    # print(f"   Operational Efficiency: 2024: {len(financial_performance_summary['operational_efficiency_2024'])} chars, 2023: {len(financial_performance_summary['operational_efficiency_2023'])} chars")
 
     # checkpoint("Section 3.2 - Financial Performance Summary")
     
@@ -2177,10 +2177,10 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     comp.market_position_2023 = business_competitiveness["market_position_2023"]
 
     print("✅ COMPLETED: S3.3 - Business Competitiveness")
-    print(f"   Business Model 2024: {len(business_competitiveness['business_model_2024'])} chars")
-    print(f"   Market Position 2024: {len(business_competitiveness['market_position_2024'])} chars")
-    print(f"   Business Model 2023: {len(business_competitiveness['business_model_2023'])} chars")
-    print(f"   Market Position 2023: {len(business_competitiveness['market_position_2023'])} chars")
+    # print(f"   Business Model 2024: {len(business_competitiveness['business_model_2024'])} chars")
+    # print(f"   Market Position 2024: {len(business_competitiveness['market_position_2024'])} chars")
+    # print(f"   Business Model 2023: {len(business_competitiveness['business_model_2023'])} chars")
+    # print(f"   Market Position 2023: {len(business_competitiveness['market_position_2023'])} chars")
 
     # checkpoint("Section 3.3 - Business Competitiveness")
         
@@ -2202,10 +2202,10 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     rf.compliance_risks_2023 = risk_factors["compliance_risks_2023"]
 
     print("✅ COMPLETED: S4.1 - Risk Factors")
-    print(f"   Market Risks 2024: {len(risk_factors['market_risks_2024'])} chars")
-    print(f"   Operational Risks 2024: {len(risk_factors['operational_risks_2024'])} chars")
-    print(f"   Financial Risks 2024: {len(risk_factors['financial_risks_2024'])} chars")
-    print(f"   Compliance Risks 2024: {len(risk_factors['compliance_risks_2024'])} chars")
+    # print(f"   Market Risks 2024: {len(risk_factors['market_risks_2024'])} chars")
+    # print(f"   Operational Risks 2024: {len(risk_factors['operational_risks_2024'])} chars")
+    # print(f"   Financial Risks 2024: {len(risk_factors['financial_risks_2024'])} chars")
+    # print(f"   Compliance Risks 2024: {len(risk_factors['compliance_risks_2024'])} chars")
 
     # checkpoint("Section 4.1 - Risk Factors")
     
@@ -2223,8 +2223,8 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
 
     print("✅ COMPLETED: S5.1 - Board Composition")
     print(f"   Found {len(board_composition['board_members'])} board members/executives")
-    for i, member in enumerate(board_composition['board_members'][:3]):  # Show first 3
-        print(f"   {i+1}. {member['name']} - {member['position']} - {member['total_income']}")
+    # for i, member in enumerate(board_composition['board_members'][:3]):  # Show first 3
+    #     print(f"   {i+1}. {member['name']} - {member['position']} - {member['total_income']}")
 
     # checkpoint("Section 5.1 - Board Composition")
             
@@ -2249,10 +2249,10 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     ic.effectiveness.report_2023 = internal_controls["effectiveness_2023"]
 
     print("✅ COMPLETED: S5.2 - Internal Controls")
-    print(f"   Risk Assessment 2024: {len(internal_controls['risk_assessment_procedures_2024'])} chars")
-    print(f"   Control Activities 2024: {len(internal_controls['control_activities_2024'])} chars")
-    print(f"   Monitoring Mechanisms 2024: {len(internal_controls['monitoring_mechanisms_2024'])} chars")
-    print(f"   Effectiveness 2024: {len(internal_controls['effectiveness_2024'])} chars")
+    # print(f"   Risk Assessment 2024: {len(internal_controls['risk_assessment_procedures_2024'])} chars")
+    # print(f"   Control Activities 2024: {len(internal_controls['control_activities_2024'])} chars")
+    # print(f"   Monitoring Mechanisms 2024: {len(internal_controls['monitoring_mechanisms_2024'])} chars")
+    # print(f"   Effectiveness 2024: {len(internal_controls['effectiveness_2024'])} chars")
 
     # checkpoint("Section 5.2 - Internal Controls")
     
@@ -2273,9 +2273,9 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     sd.organisational_restructuring.report_2023 = strategic_direction["organisational_restructuring_2023"]
 
     print("✅ COMPLETED: S6.1 - Strategic Direction")
-    print(f"   Mergers & Acquisition 2024: {len(strategic_direction['mergers_acquisition_2024'])} chars")
-    print(f"   New Technologies 2024: {len(strategic_direction['new_technologies_2024'])} chars")
-    print(f"   Organisational Restructuring 2024: {len(strategic_direction['organisational_restructuring_2024'])} chars")
+    # print(f"   Mergers & Acquisition 2024: {len(strategic_direction['mergers_acquisition_2024'])} chars")
+    # print(f"   New Technologies 2024: {len(strategic_direction['new_technologies_2024'])} chars")
+    # print(f"   Organisational Restructuring 2024: {len(strategic_direction['organisational_restructuring_2024'])} chars")
 
     # checkpoint("Section 6.1 - Strategic Direction")
 
@@ -2294,10 +2294,10 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     cu.competitive_pressures.report_2023 = challenges_uncertainties["competitive_pressures_2023"]
 
     print("✅ COMPLETED: S6.2 - Challenges and Uncertainties")
-    print(f"   Economic Challenges 2024: {len(challenges_uncertainties['economic_challenges_2024'])} chars")
-    print(f"   Competitive Pressures 2024: {len(challenges_uncertainties['competitive_pressures_2024'])} chars")
-    print(f"   Economic Challenges 2023: {len(challenges_uncertainties['economic_challenges_2023'])} chars")
-    print(f"   Competitive Pressures 2023: {len(challenges_uncertainties['competitive_pressures_2023'])} chars")
+    # print(f"   Economic Challenges 2024: {len(challenges_uncertainties['economic_challenges_2024'])} chars")
+    # print(f"   Competitive Pressures 2024: {len(challenges_uncertainties['competitive_pressures_2024'])} chars")
+    # print(f"   Economic Challenges 2023: {len(challenges_uncertainties['economic_challenges_2023'])} chars")
+    # print(f"   Competitive Pressures 2023: {len(challenges_uncertainties['competitive_pressures_2023'])} chars")
 
     # checkpoint("Section 6.2 - Challenges and Uncertainties")
 
@@ -2316,10 +2316,10 @@ def extract(md_file1: str, md_file2: str, *, currency_code: str = "USD", target_
     id.new_product_launches.report_2023 = innovation_development["new_product_launches_2023"]
 
     print("✅ COMPLETED: S6.3 - Innovation and Development Plans")
-    print(f"   R&D Investments 2024: {len(innovation_development['rd_investments_2024'])} chars")
-    print(f"   New Product Launches 2024: {len(innovation_development['new_product_launches_2024'])} chars")
-    print(f"   R&D Investments 2023: {len(innovation_development['rd_investments_2023'])} chars")
-    print(f"   New Product Launches 2023: {len(innovation_development['new_product_launches_2023'])} chars")
+    # print(f"   R&D Investments 2024: {len(innovation_development['rd_investments_2024'])} chars")
+    # print(f"   New Product Launches 2024: {len(innovation_development['new_product_launches_2024'])} chars")
+    # print(f"   R&D Investments 2023: {len(innovation_development['rd_investments_2023'])} chars")
+    # print(f"   New Product Launches 2023: {len(innovation_development['new_product_launches_2023'])} chars")
 
     # checkpoint("Section 6.3 - Innovation and Development Plans")
 

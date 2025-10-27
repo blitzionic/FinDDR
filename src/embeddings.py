@@ -96,11 +96,9 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
         print(f"      ✅ Embeddings already exist at {output_prefix}.faiss/.npz")
         return
 
-    # Load markdown
     with open(markdown_file, "r", encoding="utf-8") as f:
         markdown_text = f.read()
 
-    # Load JSONL
     sections = []
     with open(jsonl_file, "r", encoding="utf-8") as f:
         for line in f:
@@ -117,20 +115,18 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
         start, end = sec["lines"]
         section_text = get_text_from_lines(markdown_text, start, end).strip()
 
-        # Check if section is strictly one line
         if end - start == 0:
             merged_text = section_text
             merged_count = 0
             merged_start = start
             merged_end = end
 
-            # Merge next few sections (up to merge_next)
             for j in range(1, merge_next + 1):
                 if i + j < len(sections):
                     next_start, next_end = sections[i + j]["lines"]
                     next_text = get_text_from_lines(markdown_text, next_start, next_end)
                     merged_text += "\n\n" + next_text
-                    merged_end = next_end  # update merged_end dynamically
+                    merged_end = next_end 
                     merged_count += 1
 
             section_text = merged_text

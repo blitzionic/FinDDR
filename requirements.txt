@@ -9,3 +9,5 @@ faiss-cpu
 PyPDF2
 PyYAML
 tqdm
+tiktoken
+

@@ -85,29 +85,29 @@ If the company report is in Simplfied Chinese, the FinFiler report will also be 
 
 **English Report:**
 ```bash
-python src/main.py --pdf_2024 reports/company_2024.pdf \
-                   --pdf_2023 reports/company_2023.pdf \
+python src/main.py --pdf_2024 company_2024.pdf \
+                   --pdf_2023 company_2023.pdf \
                    --lang EN
 ```
 
 **Simplified Chinese Report:**
 ```bash
-python src/main.py --pdf_2024 reports/company_2024.pdf \
-                   --pdf_2023 reports/company_2023.pdf \
+python src/main.py --pdf_2024 company_2024.pdf \
+                   --pdf_2023 company_2023.pdf \
                    --lang ZH_SIM
 ```
 
 **Traditional Chinese Report:**
 ```bash
-python src/main.py --pdf_2024 reports/company_2024.pdf \
-                   --pdf_2023 reports/company_2023.pdf \
+python src/main.py --pdf_2024 company_2024.pdf \
+                   --pdf_2023 company_2023.pdf \
                    --lang ZH_TR
 ```
 
 **Indonesian Report (report will be in English):**
 ```bash
-python src/main.py --pdf_2024 reports/company_2024.pdf \
-                   --pdf_2023 reports/company_2023.pdf \
+python src/main.py --pdf_2024 company_2024.pdf \
+                   --pdf_2023 company_2023.pdf \
                    --lang IN
 ```
 
@@ -115,7 +115,6 @@ python src/main.py --pdf_2024 reports/company_2024.pdf \
 ### Output
 
 Generated reports are saved in the `artifacts/` directory:
-
 ```
 artifacts/
 ├── FinFiler_report_company1.md     

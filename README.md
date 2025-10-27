@@ -12,7 +12,7 @@
 
 ## Repo Structure
 ```
-finddr/
+FinFiler/
 ├── src/
 │   ├── main.py                 
 │   ├── extraction.py           
@@ -26,7 +26,7 @@ finddr/
 ├── utils/
 │   ├── clean_markdown.py       
 │   └── check_existing_files.py       
-├── artifacts/                   # generated finddr reports
+├── artifacts/                   # generated FinFiler reports
 ├── .env                         # API keys (OpenAI, Mistral)
 └── requirements.txt
 ```
@@ -40,8 +40,8 @@ finddr/
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/finddr.git
-cd finddr
+git clone https://github.com/blitzionic/FinFiler.git
+cd Finfiler
 ```
 ### Step 2: Setup Virtual Environment
 
@@ -80,7 +80,8 @@ python src/main.py --pdf_2024 <path-to-2024-report.pdf> \
                    --lang <EN|ZH_SIM|ZH_TR|IN>
 ```
 
-### Examples
+The following commands are for extracting from company reports in the specified languages.
+If the company report is in Simplfied Chinese, the FinFiler report will also be in Simplified Chinese. 
 
 **English Report:**
 ```bash
@@ -117,8 +118,8 @@ Generated reports are saved in the `artifacts/` directory:
 
 ```
 artifacts/
-├── finddr_report_company1.md     
-└── finddr_report_company2.md     
+├── FinFiler_report_company1.md     
+└── FinFiler_report_company2.md     
 └── ....     
 ```
 

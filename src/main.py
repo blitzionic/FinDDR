@@ -170,7 +170,7 @@ def main():
         generator = DDRGenerator(report, currency_code="USD")
         output_dir = Path("artifacts")
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_file = output_dir / f"finddr_report_{company_name}.md"
+        output_file = output_dir / f"finfiler_report_{company_name}.md"
         generator.save_report(str(output_file))
         print(f"✅ Report saved to: {output_file}")   
         

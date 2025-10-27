@@ -11,7 +11,10 @@
   - Strategic direction, challenges and uncertainties, development plans 
 - Outputs in a structured report format
 
-![System Architecture](assets/FinFiler_diagram.png)
+<p align="center">
+  <img src="assets/FinFiler_diagram.png" alt="System Architecture" width="600">
+</p>
+
 
 ## Repo Structure
 ```

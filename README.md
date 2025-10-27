@@ -9,6 +9,9 @@
   - Profitability, financial performance, business compeitiveness
   - Risk factors, internal controls
   - Strategic direction, challenges and uncertainties, development plans 
+- Outputs in a structured report format
+
+![System Architecture](assets/FinFiler_diagram.png)
 
 ## Repo Structure
 ```

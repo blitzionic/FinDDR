@@ -8,7 +8,7 @@ from mistralai.models import OCRResponse
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+load_dotenv(override=True)
 client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
 
 def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:

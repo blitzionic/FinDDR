@@ -15,7 +15,7 @@ from embeddings import search_sections, build_section_embeddings, append_next_se
 
 import argparse
 
-load_dotenv()
+load_dotenv(override=True)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 from enum import Enum

@@ -49,7 +49,7 @@ def main():
         base_2024 = Path(pdf_2024).stem
         base_2023 = Path(pdf_2023).stem
         
-        load_dotenv()
+        load_dotenv(override=True)
         api_key = os.getenv("MISTRAL_API_KEY")
         if not api_key:
             raise RuntimeError("MISTRAL_API_KEY is not set in environment")

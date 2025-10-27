@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from prompts.prompts import build_s1_1_prompt, build_s1_2_prompt, build_s1_3_prompt, build_s2_1_prompt, build_s2_2_prompt, build_s2_3_prompt, build_s2_5_prompt, build_s3_1_prompt
 from prompts.prompts import build_s3_2_prompt, build_s3_3_prompt, build_s4_1_prompt, build_s5_1_prompt, build_s5_2_prompt, build_s6_1_prompt, build_s6_2_prompt, build_s6_3_prompt
 
-load_dotenv()
+load_dotenv(override=True)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 from enum import Enum

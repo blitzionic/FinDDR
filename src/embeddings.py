@@ -12,7 +12,7 @@ import tiktoken
 from typing import List
 
 
-load_dotenv()
+load_dotenv(override=True)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def retrieve_relevant_text(search_queries: List[str], top_k: int, md_file: str) -> str:
@@ -134,7 +134,7 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
                     merged_count += 1
 
             section_text = merged_text
-            print(f"⚙️ Merged one-line section '{sec['title']}' with next {merged_count} sections "
+            print(f" Merged one-line section '{sec['title']}' with next {merged_count} sections "
                 f"({merged_start}-{merged_end}).")
 
             # Skip over the merged sections
@@ -158,7 +158,6 @@ def build_section_embeddings(jsonl_file: str, markdown_file: str, output_prefix:
 
     print(f"Building embeddings for {len(texts)} sections...")
 
-    # inside build_section_embeddings(...) before the loop
     enc = tiktoken.encoding_for_model("text-embedding-3-large")
     MAX_TOKENS = 8000       
     CHUNK_OVERLAP = 128     
